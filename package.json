@@ -1,12 +1,14 @@
 {
   "name": "todo-app-tsc",
   "version": "0.1.0",
+  "description": "A simple todo application built with Next.js 15 and TypeScript",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "react": "19.1.0",
