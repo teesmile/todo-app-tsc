@@ -1,3 +1,5 @@
+"use client";
+
 import { TodoDetail } from '@/features/todos/components/todoDetail';
 
 interface TodoPageProps {
