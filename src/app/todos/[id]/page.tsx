@@ -1,15 +1,14 @@
-"use client";
-
 import { TodoDetail } from '@/features/todos/components/todoDetail';
 
 interface TodoPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-export default function TodoPage({ params }: TodoPageProps) {
-  const todoId = parseInt(params.id);
+export default async function TodoPage({ params }: TodoPageProps) {
+  const { id } = await params;
+  const todoId = parseInt(id);
   
   if (isNaN(todoId)) {
     return (
@@ -27,8 +26,10 @@ export default function TodoPage({ params }: TodoPageProps) {
 
 // Generate metadata for SEO
 export async function generateMetadata({ params }: TodoPageProps) {
+  const { id } = await params;
+  
   return {
-    title: `Todo ${params.id} | Todo App`,
-    description: `View and edit todo ${params.id}`,
+    title: `Todo ${id} | Todo App`,
+    description: `View and edit todo ${id}`,
   };
 }

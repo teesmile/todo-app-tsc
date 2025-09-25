@@ -48,8 +48,8 @@ const TodoItem = ({ todo, showActions = true }: TodoItemProps) => {
         disabled={updateTodoMutation.isPending}
         className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
           todo.completed 
-            ? 'bg-green-500 border-green-500 text-white' 
-            : 'border-gray-300 hover:border-green-400'
+            ? 'bg-orange-500 border-orange-500 text-white' 
+            : 'border-gray-300 hover:border-orange-400'
         }`}
       >
         {todo.completed && '✓'}
@@ -62,7 +62,7 @@ const TodoItem = ({ todo, showActions = true }: TodoItemProps) => {
             type="text"
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-orange-500"
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleSaveEdit();
               if (e.key === 'Escape') handleCancelEdit();
@@ -72,7 +72,7 @@ const TodoItem = ({ todo, showActions = true }: TodoItemProps) => {
         ) : (
           <Link 
             href={`/todos/${todo.id}`}
-            className="block hover:text-blue-600 transition-colors cursor-pointer"
+            className="block hover:text-orange-600 transition-colors cursor-pointer"
           >
             <span className={`${todo.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
               {todo.todo}
@@ -88,11 +88,11 @@ const TodoItem = ({ todo, showActions = true }: TodoItemProps) => {
             <>
               <button
                 onClick={handleSaveEdit}
-                className="p-1 text-green-600 hover:text-green-700"
+                className="p-1 text-orange-600 hover:text-orange-700"
                 disabled={updateTodoMutation.isPending}
                 title="Save changes"
               >
-                <Check className="w-4 h-4" />
+                <Check className="w-8 h-8" />
               </button>
               <button
                 onClick={handleCancelEdit}
@@ -106,14 +106,14 @@ const TodoItem = ({ todo, showActions = true }: TodoItemProps) => {
             <>
               <Link
                 href={`/todos/${todo.id}`}
-                className="p-1 text-indigo-600 hover:text-indigo-700"
+                className="p-1 text-orange-600 hover:text-orange-700"
                 title="View details"
               >
                 <Eye className="w-4 h-4" />
               </Link>
               <button
                 onClick={() => setIsEditing(true)}
-                className="p-1 text-blue-600 hover:text-blue-700"
+                className="p-1 text-orange-600 hover:text-orange-700"
                 title="Edit todo"
               >
                 <Edit2 className="w-4 h-4" />
@@ -125,13 +125,13 @@ const TodoItem = ({ todo, showActions = true }: TodoItemProps) => {
 
       {/* Status Badge */}
       <div className="text-xs">
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+        {/* <span className={`px-2 py-1 rounded-full text-xs font-medium ${
           todo.completed 
             ? 'bg-green-100 text-green-800' 
             : 'bg-yellow-100 text-yellow-800'
         }`}>
           {todo.completed ? 'Done' : 'Pending'}
-        </span>
+        </span> */}
       </div>
     </div>
   );
