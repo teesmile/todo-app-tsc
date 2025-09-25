@@ -7,6 +7,7 @@ import { AddTodoForm } from './addTodoForm';
 
 export const CreateTodo = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [title, setTitle] = useState<string>('');
 
   const handleSuccess = () => {
     setIsOpen(false);
@@ -29,11 +30,7 @@ export const CreateTodo = () => {
       <Modal 
         isOpen={isOpen} 
         onClose={handleCancel}
-        title={
-          <>
-            Create <span className="text-orange-500">New Todo</span>
-          </>
-        }
+        title='Create New Todo'
       >
         <AddTodoForm 
           onSuccess={handleSuccess}
