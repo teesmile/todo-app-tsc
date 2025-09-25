@@ -90,7 +90,7 @@ export default function Home() {
               </button>
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">Tuesday</p>
-                <p className="text-xs text-blue-500">{today.split(',')[1]?.trim()}</p>
+                <p className="text-xs text-orange-600">{today.split(',')[1]?.trim()}</p>
               </div>
             </div>
           </div>
