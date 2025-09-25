@@ -1,5 +1,8 @@
 export default function LoginPage() {
   return (
-    <div>Login page content</div>
+    <div>
+      <h1>Login Page</h1>
+      <p>Login form will go here</p>
+    </div>
   )
 }
