@@ -6,6 +6,7 @@ import { CreateTodo } from "@/features/todos/components/createTodo";
 import { useTodos } from "@/features/todos/hooks/useTodos";
 import { Search, Bell, Calendar, Plus } from "lucide-react";
 import { useMemo } from "react";
+import { Suspense } from "react";
 
 export default function Home() {
   const today = new Date().toLocaleDateString('en-US', {
@@ -55,6 +56,7 @@ export default function Home() {
   }, [todoData]);
 
   return (
+     <Suspense fallback={<div>Loading...</div>}>
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
@@ -355,5 +357,6 @@ export default function Home() {
         </a>
       </footer>
     </div>
+    </Suspense>
   );
 }
