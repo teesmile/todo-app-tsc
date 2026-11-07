@@ -1,25 +1,25 @@
-'use client';
+'use client'
 
-import { Plus } from 'lucide-react';
-import { useState } from 'react';
-import { Modal } from '@/components/ui/modal';
-import { AddTodoForm } from './addTodoForm';
+import { Plus } from 'lucide-react'
+import { useState } from 'react'
+import { Modal } from '@/components/ui/modal'
+import { AddTodoForm } from './addTodoForm'
 
-export const CreateTodo = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [title, setTitle] = useState<string>('');
+export function CreateTodo() {
+  const [isOpen, setIsOpen] = useState(false)
+  const [title, setTitle] = useState<string>('')
 
   const handleSuccess = () => {
-    setIsOpen(false);
-  };
+    setIsOpen(false)
+  }
 
   const handleCancel = () => {
-    setIsOpen(false);
-  };
+    setIsOpen(false)
+  }
 
   return (
     <>
-      <button 
+      <button
         onClick={() => setIsOpen(true)}
         className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-700 transition-colors"
       >
@@ -27,16 +27,16 @@ export const CreateTodo = () => {
         Add Todo
       </button>
 
-      <Modal 
-        isOpen={isOpen} 
+      <Modal
+        isOpen={isOpen}
         onClose={handleCancel}
-        title='Create New Todo'
+        title="Create New Todo"
       >
-        <AddTodoForm 
+        <AddTodoForm
           onSuccess={handleSuccess}
           onCancel={handleCancel}
         />
       </Modal>
     </>
-  );
-};
+  )
+}

@@ -1,49 +1,49 @@
 // Todo Types
 export interface Todo {
-  id: number;
-  todo: string;
-  completed: boolean;
-  userId: number;
+  id: number
+  todo: string
+  completed: boolean
+  userId: number
   _meta?: {
-    isLocal: boolean;
-    isSynced: boolean;
-    createdAt: Date;
-    updatedAt: Date;
-  };
+    isLocal: boolean
+    isSynced: boolean
+    createdAt: Date
+    updatedAt: Date
+  }
 }
 
 export interface TodosResponse {
-  todos: Todo[];
+  todos: Todo[]
   meta: {
-    totalPages: number;
-    currentPage: number;
-    rootUrl: string;
-  };
-  total: number;
-  page: number;
-  skip: number;
-  limit: number;
+    totalPages: number
+    currentPage: number
+    rootUrl: string
+  }
+  total: number
+  page: number
+  skip: number
+  limit: number
 }
 
 // Auth Types
 export interface User {
-  id: number;
-  username: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  gender: string;
-  image: string;
-  token: string;
+  id: number
+  username: string
+  email: string
+  firstName: string
+  lastName: string
+  gender: string
+  image: string
+  token: string
 }
 
 export interface LoginCredentials {
-  email: string;
-  password: string;
+  email: string
+  password: string
 }
 
 export interface AddTodoPayload {
-  todo: string;
-  completed: boolean;
-  userId: number;
+  todo: string
+  completed: boolean
+  userId: number
 }

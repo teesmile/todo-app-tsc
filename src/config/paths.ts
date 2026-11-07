@@ -11,4 +11,4 @@ export const paths = {
     login: () => '/auth/login',
     register: () => '/auth/register',
   },
-} as const;
+} as const

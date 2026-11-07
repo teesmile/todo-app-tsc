@@ -1,12 +1,11 @@
-'use client';
+'use client'
 
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
-import '../styles/globals.css';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { Inter } from 'next/font/google'
+import '../styles/globals.css'
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'] })
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,12 +14,12 @@ const queryClient = new QueryClient({
       gcTime: 1000 * 60 * 30, // 30 minutes
     },
   },
-});
+})
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
     <html lang="en">
@@ -45,5 +44,5 @@ export default function RootLayout({
         </QueryClientProvider>
       </body>
     </html>
-  );
+  )
 }

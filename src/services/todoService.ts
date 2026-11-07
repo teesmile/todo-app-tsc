@@ -1,42 +1,44 @@
-import { todoIndexedDB, TodoRecord } from '@/lib/indexedDB';
+import type { TodoRecord } from '@/lib/indexedDB'
+import { todoIndexedDB } from '@/lib/indexedDB'
 
 interface CreateTodoData {
-  todo: string;
-  completed?: boolean;
-  userId?: number;
+  todo: string
+  completed?: boolean
+  userId?: number
 }
 
 interface UpdateTodoData {
-  id: number;
-  todo?: string;
-  completed?: boolean;
+  id: number
+  todo?: string
+  completed?: boolean
 }
 
 class TodoService {
   // Open the local database. Nothing is fetched: IndexedDB is the only store.
   async initialize() {
     try {
-      await todoIndexedDB.init();
-    } catch (error) {
-      console.error('Failed to initialize TodoService:', error);
+      await todoIndexedDB.init()
+    }
+    catch (error) {
+      console.error('Failed to initialize TodoService:', error)
     }
   }
 
   // Get all todos from IndexedDB
   async getAllTodos() {
-    const todos = await todoIndexedDB.getAllTodos();
+    const todos = await todoIndexedDB.getAllTodos()
     return {
       todos: todos.map(this.mapToTodoResponse),
       total: todos.length,
       skip: 0,
       limit: todos.length,
-    };
+    }
   }
 
   // Get single todo
   async getTodo(id: number) {
-    const todo = await todoIndexedDB.getTodo(id);
-    return todo ? this.mapToTodoResponse(todo) : null;
+    const todo = await todoIndexedDB.getTodo(id)
+    return todo ? this.mapToTodoResponse(todo) : null
   }
 
   // Create new todo (local-first)
@@ -45,43 +47,43 @@ class TodoService {
       ...data,
       isLocal: true,
       isSynced: false,
-    });
-    
-    return this.mapToTodoResponse(newTodo);
+    })
+
+    return this.mapToTodoResponse(newTodo)
   }
 
   // Update todo (local-first)
   async updateTodo(data: UpdateTodoData) {
-    const existingTodo = await todoIndexedDB.getTodo(data.id);
+    const existingTodo = await todoIndexedDB.getTodo(data.id)
     if (!existingTodo) {
-      throw new Error('Todo not found');
+      throw new Error('Todo not found')
     }
 
     const updatedTodo = await todoIndexedDB.saveTodo({
       ...existingTodo,
       ...data,
       isSynced: false, // Mark as unsynced after update
-    });
+    })
 
-    return this.mapToTodoResponse(updatedTodo);
+    return this.mapToTodoResponse(updatedTodo)
   }
 
   // Delete todo (local-first)
   async deleteTodo(id: number) {
-    await todoIndexedDB.deleteTodo(id);
+    await todoIndexedDB.deleteTodo(id)
   }
 
   // Get sync status
   async getSyncStatus() {
-    const unsynced = await todoIndexedDB.getUnsyncedTodos();
-    const all = await todoIndexedDB.getAllTodos();
-    
+    const unsynced = await todoIndexedDB.getUnsyncedTodos()
+    const all = await todoIndexedDB.getAllTodos()
+
     return {
       total: all.length,
       unsynced: unsynced.length,
       synced: all.filter(t => t.isSynced).length,
       local: all.filter(t => t.isLocal).length,
-    };
+    }
   }
 
   // Helper to map database record to API response format
@@ -98,9 +100,9 @@ class TodoService {
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
       },
-    };
+    }
   }
 }
 
-export const todoService = new TodoService();
-export type { CreateTodoData, UpdateTodoData };
+export const todoService = new TodoService()
+export type { CreateTodoData, UpdateTodoData }
