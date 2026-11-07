@@ -28,6 +28,13 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Codex review of Phases 4 and 5 outstanding (usage limit)
+Decided by: Anthony. Codex returned "You've hit your usage limit… try again at 10:28 AM" at 09:22 and again at 09:27, so the Phase routine couldn't finish for Phase 5.
+Claim: push Phase 5 (`74e45f7`, `28f231f`) without its review. Phase 4's review was already skipped (see below), so the review of both phases is outstanding.
+Verdict: OUTSTANDING. The next review against `main` covers all of Phases 4 and 5, and its findings get answered then.
+Because: the review compares the branch with `main`, so nothing pushed now escapes it; it only arrives later. The local checks Phase 5 did pass are in its entry below.
+Study: why a review gate that runs against a base branch tolerates a skipped run (search "cumulative diff review").
+
 ## 2026-11-07 — Phase 5: search, filters, URL state and shortcuts
 Decided by: Claude, building Phase 5 of the plan.
 Claim: a pure `filterTasks` (All, Active, Done, Today, Overdue, plus search) runs before grouping. The filter and search live in `?filter=&q=`. Stats come from `computeStats(tasks, today)` over every task. `n` and `/` are single-key shortcuts.
