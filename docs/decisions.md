@@ -28,6 +28,26 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Phase 6: the layout comes first, as one phone-first phase
+Decided by: Anthony. The app was unusable on a phone: at 390px the desktop dashboard squeezed into two columns, the "New task" and "Due date" labels overlapped, and the stats rings collided.
+Claim: rebuild the page phone-first (one column, two from 768px); replace the dashboard grid with a four-count summary; show when each task was added; make the due date a small optional chip; add on phones through a bottom sheet; greet by name and date.
+Verdict: SHIPPED
+Because:
+- **Merged, not inserted.** I replaced the old Phase 6 instead of inserting a new one and renumbering. The old Phase 6 was already "mobile-first layout" (single column, sheet, tap targets), and this one includes all of it. Inserting would have left a redundant phase and broken every "Phase 7–11" reference in the plan and this log.
+- **The Due chip is a disclosure of real buttons, not an ARIA menu**, so it has no keyboard model to get wrong.
+- **The Today default is shown on the chip**, not silent, so a task never lands somewhere unexpected.
+- **The greeting renders only in the browser** (`useSyncExternalStore` with a null server value), because a prerendered greeting would be stale and cause a hydration error.
+- **The name lives in `meta`** until accounts own it.
+
+Caught on the way:
+- **Two controls named "Add task".** The floating button now says "Add a task".
+- **The sheet opened with focus on Close, not the title.** React runs the child's focus effect before the parent's `showModal()`, and `showModal()` then moves focus. The jsdom stand-in didn't hide closed-dialog content, so the test passed anyway. It now runs the dialog focusing steps like a browser, and fails without the fix.
+- **"Overdue" was clipped in the filter bar at 360 and 390.** Equal segments were too narrow; they're natural-width now.
+- **Stale import runs could set the status.** A generation guard now lets only the latest run report.
+
+Known and accepted: the fixed floating button covers whatever row passes under it as you scroll, as any floating button does. It sits on top, so a tap there hits it, never the Delete beneath, and 7rem of bottom padding lets the last row scroll clear.
+Study: the `<dialog>` focusing steps, and why effects run child-first (search "HTMLDialogElement showModal focusing steps", "React effect order parent child").
+
 ## 2026-11-07 — Codex review of Phases 4 and 5 outstanding (usage limit)
 Decided by: Anthony. Codex returned "You've hit your usage limit… try again at 10:28 AM" at 09:22 and again at 09:27, so the Phase routine couldn't finish for Phase 5.
 Claim: push Phase 5 (`74e45f7`, `28f231f`) without its review. Phase 4's review was already skipped (see below), so the review of both phases is outstanding.

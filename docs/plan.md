@@ -191,16 +191,29 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
 - Unit tests: `filterTasks` × each filter × search, `computeStats` on 0, 1 and 500 tasks.
 - Component tests: typing `n` inside the search box types an "n" and doesn't jump focus; `/` from the list focuses search; reloading with `?filter=overdue` restores the filter.
 
-## Phase 6 — Mobile-first layout ◆
+## Phase 6 — Mobile-first layout, dates and a friendlier header ◆
+**Status: done.** Brought forward by the owner on 2026-11-07, because the app was unusable on a phone: at 390px the desktop dashboard squeezed into two columns, the "New task" and "Due date" labels overlapped, and the stats rings collided. This replaces the earlier, narrower Phase 6 (single column, sheet, tap targets), which it includes. So the phases after it keep their numbers, and existing references stay valid.
+
 **Changes**
-- One column is the base layout. From `md` up, stats sit in a side column. The header holds the title, the search and, on desktop, the add form.
-- On phones, the add form opens in a **bottom sheet** built on the native `<dialog>` with `showModal()`. A fixed "Add task" button sits above `env(safe-area-inset-bottom)` and opens it. The sheet's slide-in uses CSS with a `prefers-reduced-motion` fallback to an instant open.
-- ~~Fix the dead overlay classes by removing the old modal (audit §2.1).~~ Done in Phase 4: the inline add form replaced the modal, so it was deleted. The sheet's `::backdrop` is new code.
-- Tap targets are at least 44×44px.
+1. **One column, phone first:** header, add form, search and filters, task groups, then the summary. Two columns (tasks plus a summary side column) only from 768px. Nothing overlaps or scrolls sideways at 360, 390 or 768. Touch targets are at least 44px.
+2. **The old dashboard grid is gone.** The stats are a compact summary row: Done, Open, Overdue and Due today, four across on a phone and 2×2 in the side column. The rings and the "Completed tasks" panel are removed.
+3. **Dates:**
+   - Every task shows when it was added, from its automatic `createdAt`: "Added today, 9:30", "Added yesterday, 18:05", "Added 3 Nov", or "Added 3 Nov 2025" in another year. The user never types it.
+   - The due date is optional and secondary: a small Due chip offering Today, Tomorrow and Pick a date (plus No due date once one is set), not a bare date field beside the title. It reads "Due today", "Due Fri 13 Nov" or "Overdue · Tue 3 Nov".
+   - A task added while the Today filter is on gets today as its due date, and the add form's chip shows it before adding.
+4. **On phones, adding opens a bottom sheet** from a floating "Add a task" button. The sheet is a native `<dialog>` opened with `showModal()`, slides up (instantly with reduced motion), and has the title field focused. It closes on Escape, the backdrop, Close, or after adding, which announces "Added …", and focus returns to the button. On phones, `n` opens it.
+5. **A friendly header:** "Good morning, Toni · Saturday 7 November". A first name is asked for once, optional and skippable (the skip is remembered too), and kept on the device in the `meta` store. In Phase 8 a signed-in user's name comes from the account instead. The greeting and date render only in the browser, because the page is prerendered at build time and a build-time greeting would be stale and cause a hydration error.
 
-**Why** `<dialog>` with `showModal()` gives focus containment, Escape to close, an inert background and a top-layer backdrop for free, which is the whole list of what the current modal lacks (audit §3.4). The alternative was a custom sheet with a focus-trap library; it lost because it re-implements what the browser now does.
-
-**Verified by** DevTools device mode at 360, 390, 768 and 1280px: no horizontal scroll, no text cut off. On a real phone, the sheet stays above the keyboard and the add button clears the home indicator. The bottom-sheet component tests check that it opens on `n`, Escape closes it and returns focus to the trigger, and submitting closes it and announces "Task added".
+**Verified by**
+- **Unit tests:** the "Added" and "Due" wording, including the year end, and the greeting by hour.
+- **Component tests:**
+  - the Due chip: Today, Tomorrow, Pick a date, No due date, and Escape returning focus;
+  - the sheet opening with the title focused, closing on Escape with focus back on the button, closing after an add with an announcement, and opening on `n`;
+  - the Today filter's default due date, and changing it;
+  - the name prompt: save, skip remembered, 40-character limit;
+  - the summary counts.
+- **Real-browser screenshots at 360, 390 and 768**, measured for horizontal overflow, overlapping text boxes, text off-screen, clipped labels, and the filters on one line. The open sheet at 390 is measured for being modal and having the title field focused.
+- **Browser smoke checks:** Phases 4 and 5, and the legacy import.
 
 ## Phase 7 — Accessibility pass
 **Changes**
@@ -253,6 +266,7 @@ Merge `revamp` to `main` and deploy, so the live link on the resume shows a work
   - No `@supabase/ssr`, because there's no server.
   - The client module is **dynamically imported** only when env vars are present and the user opens sign-in or already has a session, so guests don't download it.
 - **Auth UI** in a `<dialog>`: email and password sign-up and sign-in, password reset, "Continue with Google", and sign out. A status chip shows Guest, Synced, Syncing, Offline, or Accounts unavailable.
+- **The header's name** comes from the account for a signed-in user (Phase 6 keeps a guest's name on the device). On first sign-in, a device name can seed an empty account name; it's never overwritten silently.
 - **Environment**:
   - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (the `sb_publishable_…` key; Supabase is deprecating the legacy `anon` key by the end of 2026).
   - Add `.env.example` with both names and no values. Add `!.env.example` to `.gitignore`, because the existing `.env*` rule (`.gitignore:34`) would otherwise ignore it.
