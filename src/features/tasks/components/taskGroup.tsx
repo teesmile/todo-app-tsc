@@ -8,13 +8,15 @@ import { TaskItem } from './taskItem'
 interface TaskGroupProps {
   group: Group
   onDelete: (task: Task) => void
+  today: string
+  now: Date | null
 }
 
 /**
  * One group (Overdue, Today, ...) as a labelled section with a list. The
  * heading takes programmatic focus when the last of its tasks is deleted.
  */
-export function TaskGroup({ group, onDelete }: TaskGroupProps) {
+export function TaskGroup({ group, onDelete, today, now }: TaskGroupProps) {
   const headingId = useId()
   const tone = group.key === 'overdue' ? 'text-red-700' : 'text-gray-700'
 
@@ -37,7 +39,7 @@ export function TaskGroup({ group, onDelete }: TaskGroupProps) {
       <ul className="space-y-2">
         {group.tasks.map(task => (
           <li key={task.id}>
-            <TaskItem task={task} onDelete={onDelete} />
+            <TaskItem task={task} onDelete={onDelete} today={today} now={now} />
           </li>
         ))}
       </ul>

@@ -4,12 +4,18 @@ import type { Task } from '../store/types'
 import { Trash2 } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useAction } from '../hooks/useAction'
+import { formatAdded } from '../lib/dates'
 import { saveErrorMessage } from '../lib/errors'
 import { MAX_TITLE_LENGTH, update } from '../store/repository'
+import { DueChooser } from './dueChooser'
 
 interface TaskItemProps {
   task: Task
   onDelete: (task: Task) => void
+  /** `YYYY-MM-DD`, for the due chip's words. */
+  today: string
+  /** For "Added today, 9:30"; null until the browser's clock is read. */
+  now: Date | null
 }
 
 /**
@@ -17,11 +23,11 @@ interface TaskItemProps {
  * - a real checkbox, labelled by the title, to complete it;
  * - the title as a button that turns into an input (Enter or blur saves,
  *   Escape cancels);
- * - a native date input for the due date;
+ * - when it was added, and its due date as a small secondary chip;
  * - a Delete button.
  * A failed save shows the error here and keeps the draft.
  */
-export function TaskItem({ task, onDelete }: TaskItemProps) {
+export function TaskItem({ task, onDelete, today, now }: TaskItemProps) {
   const titleId = useId()
   const errorId = useId()
   const [editing, setEditing] = useState(false)
@@ -96,19 +102,22 @@ export function TaskItem({ task, onDelete }: TaskItemProps) {
   const error = saveTitle.error ?? toggle.error ?? setDue.error
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl bg-gray-50 p-3 hover:bg-gray-100">
+    <div className="flex items-start gap-1 rounded-xl bg-gray-50 p-2 hover:bg-gray-100 md:gap-2">
       {/* The checkbox's name is the title, from this always-present span. */}
       <span id={titleId} className="sr-only">{task.title}</span>
-      <input
-        type="checkbox"
-        checked={task.completed}
-        onChange={() => toggle.fire(task.id, { completed: !task.completed })}
-        aria-labelledby={titleId}
-        data-task-id={task.id}
-        className="h-5 w-5 shrink-0 accent-orange-500"
-      />
+      {/* A 44px touch target around a 20px checkbox. */}
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center">
+        <input
+          type="checkbox"
+          checked={task.completed}
+          onChange={() => toggle.fire(task.id, { completed: !task.completed })}
+          aria-labelledby={titleId}
+          data-task-id={task.id}
+          className="h-5 w-5 accent-orange-500"
+        />
+      </span>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 py-2">
         {editing
           ? (
               <input
@@ -148,23 +157,22 @@ export function TaskItem({ task, onDelete }: TaskItemProps) {
         {Boolean(error) && (
           <p id={errorId} role="alert" className="mt-1 text-sm text-red-600">{saveErrorMessage(error)}</p>
         )}
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-xs text-gray-500">{now ? formatAdded(task.createdAt, now) : ''}</span>
+          <DueChooser
+            value={task.dueDate}
+            onChange={dueDate => setDue.fire(task.id, { dueDate })}
+            today={today}
+            subject={`"${task.title}"`}
+          />
+        </div>
       </div>
-
-      {/* Remounts when the stored date changes, so it always shows the saved value. */}
-      <input
-        key={task.dueDate ?? 'none'}
-        type="date"
-        defaultValue={task.dueDate ?? ''}
-        onChange={e => setDue.fire(task.id, { dueDate: e.target.value || null })}
-        aria-label={`Due date for "${task.title}"`}
-        className="rounded border border-gray-300 px-2 py-1 text-sm text-gray-700"
-      />
 
       <button
         type="button"
         onClick={() => onDelete(task)}
         aria-label={`Delete "${task.title}"`}
-        className="rounded p-1 text-red-600 hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
       >
         <Trash2 className="h-4 w-4" aria-hidden="true" />
       </button>

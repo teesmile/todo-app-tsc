@@ -6,6 +6,7 @@ import type { Toast } from './undoToast'
 import { Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useListParams } from '../hooks/useListParams'
+import { useNow } from '../hooks/useNow'
 import { useShortcuts } from '../hooks/useShortcuts'
 import { useToday } from '../hooks/useToday'
 import { saveErrorMessage } from '../lib/errors'
@@ -15,14 +16,19 @@ import { groupTasks } from '../lib/group'
 import { useTasks } from '../store/hooks'
 import { clearSamples, purgeGuestTombstones, remove, undoRemove } from '../store/repository'
 import { AddTaskForm } from './addTaskForm'
+import { AddTaskSheet } from './addTaskSheet'
 import { TaskGroup } from './taskGroup'
 import { TaskToolbar } from './taskToolbar'
 import { UndoToast } from './undoToast'
 
-/** The task list: the add form, the six date groups and the undo toast. */
+/**
+ * The task list: the add form (inline from tablet width, a bottom sheet on
+ * phones), search and filters, the date groups and the undo toast.
+ */
 export function TaskList() {
   const tasks = useTasks()
   const today = useToday()
+  const now = useNow()
   const { filter, setFilter, query, setQuery } = useListParams()
   // Filtering is a pure pass over tasks already in memory: instant, no debounce.
   const shown = useMemo(() => (tasks ? filterTasks(tasks, { filter, query }, today) : undefined), [tasks, filter, query, today])
@@ -33,8 +39,14 @@ export function TaskList() {
   const addRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
+  const [sheetOpen, setSheetOpen] = useState(false)
+  // While the Today filter is on, a new task is due today, or it would vanish
+  // from the view it was added in. The add form's Due chip shows this.
+  const defaultDue = filter === 'today' ? today : null
+
   useShortcuts({
-    'n': () => addRef.current?.focus(),
+    // The inline form is hidden below tablet width, so there `n` opens the sheet.
+    'n': () => (window.matchMedia('(min-width: 768px)').matches ? addRef.current?.focus() : setSheetOpen(true)),
     '/': () => searchRef.current?.focus(),
   })
   const [toast, setToast] = useState<Toast | null>(null)
@@ -126,8 +138,11 @@ export function TaskList() {
   }
 
   return (
-    <div ref={listRef} className="space-y-6">
-      <AddTaskForm titleRef={addRef} />
+    <div ref={listRef} className="space-y-5">
+      {/* Inline from tablet width; on phones the floating button opens the sheet. */}
+      <div className="hidden md:block">
+        <AddTaskForm titleRef={addRef} today={today} defaultDue={defaultDue} />
+      </div>
 
       <TaskToolbar
         query={query}
@@ -153,13 +168,13 @@ export function TaskList() {
           ? (
               <p className="py-8 text-center text-gray-500">
                 {tasks?.length === 0
-                  ? 'No tasks yet. Add your first one above.'
+                  ? 'No tasks yet. Add your first one.'
                   : query.trim()
                     ? `No ${filter === 'all' ? '' : `${FILTER_LABELS[filter].toLowerCase()} `}tasks match "${query.trim()}".`
                     : `No ${FILTER_LABELS[filter].toLowerCase()} tasks.`}
               </p>
             )
-          : groups.map(group => <TaskGroup key={group.key} group={group} onDelete={handleDelete} />)}
+          : groups.map(group => <TaskGroup key={group.key} group={group} onDelete={handleDelete} today={today} now={now} />)}
 
       {hasSamples && (
         <div className="border-t border-gray-100 pt-4">
@@ -173,6 +188,13 @@ export function TaskList() {
         </div>
       )}
 
+      <AddTaskSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        today={today}
+        defaultDue={defaultDue}
+        onAdded={task => setToast({ id: crypto.randomUUID(), message: `Added "${task.title}"`, durationMs: 3000 })}
+      />
       <UndoToast toast={toast} onClose={closeToast} />
     </div>
   )
