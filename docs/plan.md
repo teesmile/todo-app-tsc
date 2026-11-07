@@ -151,6 +151,8 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
 - **Live query:** a component using `useTasks` re-renders after `add()` with no manual refresh.
 
 ## Phase 4 — Core task UI ◆
+**Status: done.** The decisions are in `docs/decisions.md`.
+
 **Changes**
 - Rebuild the list as `TaskList`, `TaskGroup` and `TaskItem`, replacing the Phase 3 rewired components:
   - The completion control is a real `<input type="checkbox">` with the task title as its label.
@@ -165,6 +167,8 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
   - A tombstone stays local until the toast has closed, so a synced delete never needs to be undone (Phase 9).
   - Guest tombstones older than the undo window are purged on boot, because nothing will ever sync them.
 - **Add**: a single-line form at the top of the list (title plus optional date). It becomes a bottom sheet on phones in Phase 6.
+- **Clear sample tasks** (from the v1 brief, which no phase had owned): a button under the list while any samples remain. It clears them with one Undo for all of them; `clearSamples()` returns a token per task.
+- **Today follows the clock**: `useToday()` re-groups at local midnight and when the tab becomes visible again, so a list left open overnight moves Tomorrow into Today.
 - Rewrite `todoItem.test.tsx` against `TaskItem`, renamed to `taskItem.test.tsx`.
 
 **Why** A tombstone with field-level undo means a reload or closed tab during the toast leaves the data matching what was on screen (deleted). The undo can't resurrect stale content, because it never writes content. The trade-off is that undo doesn't survive a reload, which matches what users expect from a toast. Grouping is a pure function that takes `today` as an argument, so the midnight and month-boundary cases can be tested without faking the clock.
@@ -189,7 +193,7 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
 **Changes**
 - One column is the base layout. From `md` up, stats sit in a side column. The header holds the title, the search and, on desktop, the add form.
 - On phones, the add form opens in a **bottom sheet** built on the native `<dialog>` with `showModal()`. A fixed "Add task" button sits above `env(safe-area-inset-bottom)` and opens it. The sheet's slide-in uses CSS with a `prefers-reduced-motion` fallback to an instant open.
-- Fix the dead overlay classes by removing the old modal (audit §2.1); `::backdrop` replaces it.
+- ~~Fix the dead overlay classes by removing the old modal (audit §2.1).~~ Done in Phase 4: the inline add form replaced the modal, so it was deleted. The sheet's `::backdrop` is new code.
 - Tap targets are at least 44×44px.
 
 **Why** `<dialog>` with `showModal()` gives focus containment, Escape to close, an inert background and a top-layer backdrop for free, which is the whole list of what the current modal lacks (audit §3.4). The alternative was a custom sheet with a focus-trap library; it lost because it re-implements what the browser now does.
@@ -198,7 +202,7 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
 
 ## Phase 7 — Accessibility pass
 **Changes**
-- Each group is a `<section>` with a heading, holding a `<ul>`. There's one `<h1>`.
+- Each group is a `<section>` with a heading, holding a `<ul>` (built in Phase 4; check it here). There's one `<h1>`.
 - A skip link and visible `:focus-visible` rings.
 - A single polite live region for add, delete, undo, complete and clear announcements.
 - Contrast is checked for every text and state colour. `vitest-axe` runs on the main views.

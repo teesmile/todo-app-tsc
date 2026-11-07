@@ -28,6 +28,22 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Phase 4: grouped list, delete with undo, and where focus goes
+Decided by: Claude, building Phase 4 of the plan.
+Claim: tasks group into Overdue, Today, Tomorrow, Upcoming, No date and Done through a pure `groupTasks(tasks, today)`. Delete tombstones the task and shows one 6-second Undo toast. Focus is placed deliberately after every delete and undo.
+Verdict: SHIPPED
+Because:
+- **Order.** Inside a group it's due date, then newest first, so a task you just added appears at the top of its group. Done is most recently completed first, because sorting finished work by due date isn't useful.
+- **Undo.** Only one toast at a time: a new delete replaces it and the earlier delete stands. The timer pauses on hover or focus (WCAG 2.2.1). The live region stays mounted, because screen readers only announce changes to a region that already exists.
+- **Focus.** After a delete it goes to the next row in the group, else the group's heading, else the add field (`focusAfterRemoving`). After Undo it goes to the restored row. Without this, deleting with a keyboard drops focus to `<body>`.
+- **Double-click.** No guard in the list: a second `remove()` finds the tombstone and returns no token, so there's one toast and one rev bump. That's tested through the UI.
+- **Midnight.** `useToday()` re-groups at midnight and on `visibilitychange`, so the grouping stays pure and the hook owns the clock.
+- **Clear samples.** Built here, because no phase owned it; one Undo restores all of them.
+- **Purge.** Guest tombstones past the window are purged once per load; signed-in users' tombstones are kept for sync.
+
+Alternatives: hiding a row and committing the delete when the toast closes lost because a closed tab would leave the screen and the store disagreeing. A focus-trap library or a custom listbox lost to native checkboxes, buttons and date inputs.
+Study: managing focus after removing the focused element (search "focus management deleting list item accessibility").
+
 ## 2026-11-07 — Codex review 5: Phase 3 truncated, swallowed and stranded
 Codex challenged: (1) the legacy import truncates descriptions over 500 characters, then marks the import done; (2) both forms swallow save failures, including the new 500-character limit; (3) a failed legacy import is invisible, with no retry; (4) deleting the only row on page 2 leaves an empty list with no way back.
 Verdict: AGREE on all four; DISAGREE only with clamping the page (pagination removed instead)
