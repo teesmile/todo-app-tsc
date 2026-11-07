@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDb, resetDbForTests, TasksDB } from './db'
-import { add, clearSamples, listTasks, MAX_TITLE_LENGTH, remove, TaskNotFoundError, TitleError, undoRemove, update } from './repository'
+import { add, clearSamples, listTasks, MAX_TITLE_LENGTH, purgeGuestTombstones, remove, TaskNotFoundError, TitleError, UNDO_WINDOW_MS, undoRemove, update } from './repository'
 
 // Reopening the database is what a page reload does: a new connection, the
 // same stored data.
@@ -118,16 +118,55 @@ describe('samples', () => {
     await update(editedSample.id, { title: `${editedSample.title} this weekend` })
     await update(completedSample.id, { completed: true })
 
-    expect(await clearSamples()).toBe(4)
+    expect(await clearSamples()).toHaveLength(4)
 
     const left = await listTasks()
     expect(left.map(t => t.id).sort()).toEqual([mine.id, editedSample.id].sort())
+  })
+
+  it('can undo a whole clear with its tokens', async () => {
+    const tokens = await clearSamples()
+    expect((await listTasks()).filter(t => t.isSample === 1)).toHaveLength(0)
+    await Promise.all(tokens.map(token => undoRemove(token)))
+    expect((await listTasks()).filter(t => t.isSample === 1)).toHaveLength(5)
   })
 
   it('treats a due-date change as an edit, but not completing', async () => {
     const [sample] = (await listTasks()).filter(t => t.isSample === 1)
     expect((await update(sample.id, { completed: true })).isSample).toBe(1)
     expect((await update(sample.id, { dueDate: '2030-01-01' })).isSample).toBe(0)
+  })
+})
+
+describe('purging guest tombstones', () => {
+  it('removes guest tombstones past the undo window, and keeps recent ones and signed-in users\' ones', async () => {
+    const t0 = new Date('2026-11-07T12:00:00Z').getTime()
+    vi.useFakeTimers({ now: t0, toFake: ['Date'] })
+    try {
+      const old = await add({ title: 'Deleted a while ago' })
+      const mine = await add({ title: 'Signed-in user, deleted a while ago' }, { ownerId: 'user-123' })
+      await remove(old.id)
+      await remove(mine.id)
+
+      vi.setSystemTime(t0 + UNDO_WINDOW_MS)
+      const recent = await add({ title: 'Deleted just now' })
+      await remove(recent.id)
+
+      expect(await purgeGuestTombstones({ now: t0 + UNDO_WINDOW_MS + 1 })).toBe(1)
+      const db = getDb()
+      expect(await db.tasks.get(old.id)).toBeUndefined()
+      expect(await db.tasks.get(recent.id)).toBeDefined()
+      expect(await db.tasks.get(mine.id)).toBeDefined()
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('never touches a live task', async () => {
+    const live = await add({ title: 'Still here' })
+    expect(await purgeGuestTombstones({ now: Date.now() + UNDO_WINDOW_MS * 10 })).toBe(0)
+    expect(await getDb().tasks.get(live.id)).toBeDefined()
   })
 })
 

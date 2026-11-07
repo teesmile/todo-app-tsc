@@ -147,9 +147,10 @@ export async function undoRemove(token: UndoToken, { db = getDb() }: { db?: Task
 /**
  * Tombstones every live task still marked as a sample. Edited samples aren't
  * marked any more (see `update`), so this never deletes something you've
- * worked on. Returns how many were cleared.
+ * worked on. Returns one undo token per cleared task, so the whole clear can
+ * be undone.
  */
-export async function clearSamples({ db = getDb(), ownerId = GUEST }: { db?: TasksDB, ownerId?: OwnerId } = {}): Promise<number> {
+export async function clearSamples({ db = getDb(), ownerId = GUEST }: { db?: TasksDB, ownerId?: OwnerId } = {}): Promise<UndoToken[]> {
   return db.transaction('rw', db.tasks, async () => {
     const samples = await db.tasks
       .where('isSample')
@@ -158,7 +159,28 @@ export async function clearSamples({ db = getDb(), ownerId = GUEST }: { db?: Tas
       .toArray()
     const now = Date.now()
     await db.tasks.bulkPut(samples.map(task => ({ ...task, deletedAt: now, updatedAt: now, dirty: 1, rev: task.rev + 1 })))
-    return samples.length
+    return samples.map(task => ({ id: task.id, rev: task.rev + 1 }))
+  })
+}
+
+/** How long a delete can be undone, in ms. The toast shows for this long. */
+export const UNDO_WINDOW_MS = 6000
+
+/**
+ * Hard-deletes guest tombstones whose undo window has passed. A guest's
+ * tombstone is only kept for undo, because nothing will ever sync it. A
+ * signed-in user's tombstones are left alone: sync needs them so a delete
+ * doesn't come back from another device (Phase 9). Returns how many went.
+ */
+export async function purgeGuestTombstones({ db = getDb(), now = Date.now() }: { db?: TasksDB, now?: number } = {}): Promise<number> {
+  return db.transaction('rw', db.tasks, async () => {
+    const expired = await db.tasks
+      .where('ownerId')
+      .equals(GUEST)
+      .filter(task => task.deletedAt !== null && task.deletedAt < now - UNDO_WINDOW_MS)
+      .primaryKeys()
+    await db.tasks.bulkDelete(expired)
+    return expired.length
   })
 }
 
