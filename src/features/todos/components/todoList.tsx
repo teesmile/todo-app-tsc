@@ -1,9 +1,9 @@
 'use client'
 
-import { Edit2, Loader2 } from 'lucide-react'
+import { Edit2, Loader2, Trash2 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
-import { useTodos } from '../hooks/useTodos'
+import { useDeleteTodo, useTodos } from '../hooks/useTodos'
 import { CreateTodo } from './createTodo'
 
 import { EditTodoForm } from './editTodoForm'
@@ -20,6 +20,7 @@ export function TodoList() {
   const [editingTodo, setEditingTodo] = useState<number | null>(null)
 
   const todoQuery = useTodos({ limit, skip })
+  const deleteTodo = useDeleteTodo()
 
   // Dynamic date generation
   const getCurrentDate = () => {
@@ -99,6 +100,12 @@ export function TodoList() {
         <span className="text-orange-500 !important">{getTodayLabel()}</span>
       </div>
 
+      {deleteTodo.isError && (
+        <p role="alert" className="text-sm text-red-600">
+          That task couldn't be deleted. Try again.
+        </p>
+      )}
+
       {/* Todo Items */}
       <div className="space-y-3">
         {todos.map(todo => (
@@ -152,6 +159,16 @@ export function TodoList() {
                         }}
                       >
                         <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded disabled:opacity-50"
+                        aria-label={`Delete "${todo.todo}"`}
+                        title="Delete todo"
+                        disabled={deleteTodo.isPending}
+                        onClick={() => deleteTodo.mutate(todo.id)}
+                      >
+                        <Trash2 className="w-4 h-4" aria-hidden="true" />
                       </button>
                     </span>
                   </div>
