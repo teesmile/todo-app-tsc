@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useAction } from '@/features/tasks/hooks/useAction'
-import { add } from '@/features/tasks/store/repository'
+import { saveErrorMessage } from '@/features/tasks/lib/errors'
+import { add, MAX_TITLE_LENGTH } from '@/features/tasks/store/repository'
 
 interface AddTodoFormProps {
   onSuccess?: () => void
@@ -14,6 +15,7 @@ export function AddTodoForm({ onSuccess, onCancel }: AddTodoFormProps) {
   const [completed, setCompleted] = useState(false)
 
   const addTask = useAction(add)
+  const fieldId = useId()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,10 +40,14 @@ export function AddTodoForm({ onSuccess, onCancel }: AddTodoFormProps) {
   return (
     <form onSubmit={handleSubmit} className="p-6">
       <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor={`${fieldId}-title`} className="block text-sm font-medium text-gray-700 mb-2">
           Todo Description
         </label>
         <textarea
+          id={`${fieldId}-title`}
+          aria-describedby={`${fieldId}-hint`}
+          aria-invalid={Boolean(addTask.error)}
+          maxLength={MAX_TITLE_LENGTH}
           value={todo}
           onChange={e => setTodo(e.target.value)}
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
@@ -50,6 +56,16 @@ export function AddTodoForm({ onSuccess, onCancel }: AddTodoFormProps) {
           required
           autoFocus
         />
+        <p id={`${fieldId}-hint`} className="mt-1 text-xs text-gray-500">
+          Up to
+          {' '}
+          {MAX_TITLE_LENGTH}
+          {' '}
+          characters.
+        </p>
+        {Boolean(addTask.error) && (
+          <p role="alert" className="mt-2 text-sm text-red-600">{saveErrorMessage(addTask.error)}</p>
+        )}
       </div>
 
       <div className="mb-6">

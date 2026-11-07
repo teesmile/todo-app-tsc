@@ -2,7 +2,7 @@
 
 import type { TaskStats } from '@/features/tasks/store/stats'
 import { Suspense } from 'react'
-import { useLegacyImport, useStats } from '@/features/tasks/store/hooks'
+import { retryLegacyImport, useLegacyImport, useStats } from '@/features/tasks/store/hooks'
 import { CreateTodo } from '@/features/todos/components/createTodo'
 import { TodoList } from '@/features/todos/components/todoList'
 
@@ -33,6 +33,20 @@ export default function Home() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <main>
+            {importStatus === 'failed' && (
+              <div role="alert" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                <p>
+                  Some tasks from the previous version couldn&apos;t be brought over yet. They&apos;re still saved on this device.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => retryLegacyImport()}
+                  className="rounded-md bg-white px-3 py-1 font-medium text-red-800 ring-1 ring-red-300 hover:bg-red-100"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
             {importStatus === 'blocked' && (
               <p role="status" className="mb-6 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
                 Close any other tabs of this app to finish bringing over your tasks from the previous version.

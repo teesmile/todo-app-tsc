@@ -1,7 +1,6 @@
 'use client'
 
 import { Edit2, Loader2, Trash2 } from 'lucide-react'
-import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { useAction } from '@/features/tasks/hooks/useAction'
 import { useTasks } from '@/features/tasks/store/hooks'
@@ -13,12 +12,6 @@ import { EditTodoForm } from './editTodoForm'
 import TodoItem from './todoItem'
 
 export function TodoList() {
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const page = searchParams?.get('page') ? Number(searchParams.get('page')) : 1
-  const limit = searchParams?.get('limit') ? Number(searchParams.get('limit')) : 10
-  const skip = (page - 1) * limit
-
   const [editingTodo, setEditingTodo] = useState<string | null>(null)
 
   const tasks = useTasks()
@@ -57,13 +50,6 @@ export function TodoList() {
     return today.toLocaleDateString('en-US', { weekday: 'long' })
   }
 
-  // Navigation functions
-  const navigateToPage = (newPage: number) => {
-    const params = new URLSearchParams(searchParams?.toString())
-    params.set('page', newPage.toString())
-    router.push(`/?${params.toString()}`)
-  }
-
   if (tasks === undefined) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -72,11 +58,11 @@ export function TodoList() {
     )
   }
 
-  const total = tasks.length
-  const todos = tasks.slice(skip, skip + limit)
-  const totalPages = Math.ceil(total / limit)
+  // Every task, no pagination (review 5). Deleting the last row on a
+  // later page used to strand the list; a local task list doesn't need pages.
+  const todos = tasks
 
-  if (!total) {
+  if (!todos.length) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 mb-4">No todos found</p>
@@ -177,50 +163,6 @@ export function TodoList() {
         ))}
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-6 border-t">
-          <div className="text-sm text-gray-700">
-            Showing
-            {' '}
-            {skip + 1}
-            {' '}
-            to
-            {' '}
-            {Math.min(skip + limit, total)}
-            {' '}
-            of
-            {' '}
-            {total}
-            {' '}
-            todos
-          </div>
-          <div className="flex space-x-2">
-            <button
-              type="button"
-              className="px-3 py-1 text-sm border rounded-md disabled:opacity-50 hover:bg-gray-50"
-              disabled={page <= 1}
-              onClick={() => navigateToPage(page - 1)}
-            >
-              Prev
-            </button>
-            <span className="px-3 py-1 text-sm bg-orange-50 text-orange-600 rounded-md">
-              {page}
-              {' '}
-              of
-              {totalPages}
-            </span>
-            <button
-              type="button"
-              className="px-3 py-1 text-sm border rounded-md disabled:opacity-50 hover:bg-gray-50"
-              disabled={page >= totalPages}
-              onClick={() => navigateToPage(page + 1)}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

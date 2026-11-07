@@ -8,7 +8,7 @@ import TodoItem from '../components/todoItem'
 // setup is proven before Phase 4 replaces the component. The store's update()
 // is mocked at the module boundary, so the test checks exactly what the
 // component asks the store to do.
-const update = vi.fn(async () => ({}))
+const { update } = vi.hoisted(() => ({ update: vi.fn(async () => ({})) }))
 vi.mock('@/features/tasks/store/repository', () => ({ update }))
 
 const ID = '0f8b6c2e-3d1a-4b7e-9c55-2a6d8e1f4b90'

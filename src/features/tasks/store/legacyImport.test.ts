@@ -3,7 +3,7 @@ import { validate as isUuid, version as uuidVersion } from 'uuid'
 import { describe, expect, it, vi } from 'vitest'
 import { getDb, getInstallId, TasksDB } from './db'
 import { LEGACY_DB_NAME, legacyTaskId, runLegacyImport } from './legacyImport'
-import { listTasks, update } from './repository'
+import { listTasks, MAX_TITLE_LENGTH, TitleError, update } from './repository'
 
 const DAY = 24 * 60 * 60 * 1000
 const t0 = new Date('2026-10-01T09:00:00Z')
@@ -128,6 +128,19 @@ describe('legacy import', () => {
     expect(await importedTitles()).toEqual([])
 
     expect(await runLegacyImport()).toMatchObject({ status: 'imported', imported: 2 })
+  })
+
+  it('keeps a long description whole, and lets it be shortened but not grown', async () => {
+    const long = `Moving checklist: ${'pack, label and photograph each box; '.repeat(18)}`.trim()
+    expect(long.length).toBeGreaterThan(MAX_TITLE_LENGTH)
+    await seedLegacy([{ id: 1794051495300, todo: long, completed: false, isLocal: true, createdAt: t0, updatedAt: t0 }])
+
+    await runLegacyImport()
+    const [task] = (await listTasks()).filter(t => t.isSample === 0)
+    expect(task.title).toBe(long)
+
+    await expect(update(task.id, { title: `${long} and more` })).rejects.toBeInstanceOf(TitleError)
+    expect((await update(task.id, { title: long.slice(0, 600) })).title).toBe(long.slice(0, 600).trim())
   })
 
   it('waits for an old tab, imports what it wrote meanwhile, then locks old code out', async () => {

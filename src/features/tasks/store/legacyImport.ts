@@ -75,7 +75,8 @@ export function mapLegacyRow(row: LegacyTodo, installId: string, now = Date.now(
   return {
     id: legacyTaskId(row.id, installId),
     ownerId: GUEST,
-    title: title.slice(0, 500),
+    // Kept whole, however long: the old app had no limit (review 5).
+    title,
     completed: Boolean(row.completed),
     dueDate: null,
     isSample: 0,
