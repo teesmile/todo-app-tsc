@@ -20,12 +20,14 @@ These went beyond the original brief. The owner approved all of them on 2026-11-
 
 ## Invariants every phase must keep
 
-These come out of Codex review 1. Any phase that breaks one has failed, whatever its own checks say.
+These come out of Codex reviews 1 and 2. Any phase that breaks one has failed, whatever its own checks say.
 
 - **No task is ever destroyed except by the user deleting it.** Migrations import; they never drop user rows.
 - **A delete is a tombstone, and it is terminal.** Deleting sets `deletedAt` in the same transaction that reads the current row. The only thing that can clear `deletedAt` is that delete's own undo, on the same device, before the delete has synced.
 - **Undo touches nothing but `deletedAt`.** It never writes back a remembered copy of the task, so it can't overwrite an edit made in another tab.
-- **Edits refuse tombstoned rows.** `update` checks `deletedAt` inside its own transaction.
+- **Edits refuse tombstoned rows.** `update` checks `deletedAt` inside its own transaction. Every read-check-write runs in one IndexedDB `readwrite` transaction, never a read in one transaction and a write in another. This was fixed in today's code in `9a665b0`, and it holds for the Dexie layer too.
+- **Every task id is a UUID**, from creation or import onwards, because the server table's key is `uuid`.
+- **The server decides conflicts; clients converge on its answer.** Last-write-wins and tombstone-wins run only in the Postgres trigger. A client never compares its own `updatedAt` with the server's: it adopts the server's row for anything it hasn't changed locally since its last push.
 
 ---
 
@@ -81,28 +83,33 @@ Removing the only delete control here loses nothing that works. Today's delete i
     meta: 'key',
   })
   ```
-  - A task is `{ id, ownerId, title, completed, dueDate, isSample, dirty, createdAt, updatedAt, completedAt, deletedAt }`:
+  - A task is `{ id, ownerId, title, completed, dueDate, isSample, dirty, rev, createdAt, updatedAt, completedAt, deletedAt }`:
     - `id` comes from `crypto.randomUUID()`;
     - `ownerId` is `'guest'` or a Supabase user id;
     - `dueDate` is `'YYYY-MM-DD' | null`;
     - `isSample` and `dirty` are `0 | 1`, because booleans can't be IndexedDB keys;
-    - the timestamps are epoch ms numbers, and `deletedAt` is `number | null`.
+    - the timestamps are epoch ms numbers, and `deletedAt` is `number | null`;
+    - `rev` is a local mutation counter that every local write increments. Push acknowledgement (Phase 9) compares revisions, not timestamps, because two edits can land in the same millisecond and a clamped server timestamp won't match the local one.
   - `completed` and `deletedAt` aren't indexed; they're filtered in memory.
-  - `meta` is a key–value store for sync cursors and once-only flags.
+  - `meta` is a key–value store for sync cursors, once-only flags and `installId`, a random UUID written in `populate` that identifies this browser's database.
 - **Repository** of plain async functions over `db.tasks`. Every write runs inside a `db.transaction('rw', …)` that reads the current row first:
   - `add`;
-  - `update`, which rejects if the row is tombstoned and sets `updatedAt` and `dirty = 1`;
+  - `update`, which rejects if the row is tombstoned and sets `updatedAt`, `dirty = 1` and `rev + 1`;
   - `remove`, which tombstones the row and returns a one-shot undo token `{ id, deletedAt }`; a second `remove` on the same row is a no-op that returns no token;
   - `undoRemove(token)`, which clears `deletedAt` only if the row's `deletedAt` still equals the token's, then consumes the token;
   - `clearSamples`, which tombstones `where('isSample').equals(1)`.
 - **Read hooks** `useTasks` and `useStats` wrap `useLiveQuery` and return only `ownerId === currentOwner && deletedAt === null` rows. Components call the hooks and the repository and never touch `db` directly, which keeps store logic out of components (CLAUDE.md).
 - **Seeding**: `db.on('populate', …)` bulk-adds the tasks from `src/features/tasks/data/sample-tasks.ts`. Dexie fires `populate` exactly once, when the database is first created, inside the same upgrade transaction. The samples' due dates are day offsets (−2, 0, +1, +5, null) resolved against today, so every group has an example whatever day it is.
-- **Legacy import** (replaces the old "delete `TodoAppDB`" step, which would have destroyed the user's tasks):
-  - **Open:** open `TodoAppDB` with Dexie in dynamic mode (no declared schema). If it doesn't exist, Dexie throws `NoSuchDatabaseError` and there's nothing to do.
-  - **Select:** read every `todos` row with no `deletedAt` where either `isLocal === true` (the user created it) or `updatedAt > createdAt` (a dummyjson row the user changed after its last sync).
-  - **Map:** each row becomes a guest task with id `legacy-<oldId>`, `title` from `todo`, `completed`, `dueDate: null`, `isSample: 0`, and the original timestamps.
+- **Legacy import, as a versioned cutover** (Codex reviews 1 and 2). Deleting `TodoAppDB` would destroy the user's tasks. Snapshotting it while an old tab can still write would lose that tab's later writes.
+  - **Cut over first:** open `TodoAppDB` at **version 2** with the raw `indexedDB.open('TodoAppDB', 2)`.
+    - If `onupgradeneeded` reports `oldVersion === 0`, the database never existed. Abort the upgrade so no empty database is created; there's nothing to import.
+    - Otherwise the upgrade adds a `cutover` store. It can only run once every version-1 connection has closed. The old wrapper ignores `versionchange`, so an old tab blocks it, and `onblocked` fires instead.
+    - While blocked, the app runs normally without the legacy rows and shows "Close other tabs of this app to finish bringing over your tasks". The upgrade proceeds by itself when they close.
+    - Once the database is at version 2, old code can never open it again: its version-1 request fails with `VersionError`. So no legacy write can happen after the snapshot.
+  - **Select (after the cutover):** read every `todos` row with no `deletedAt` where either `isLocal === true` (the user created it) or `updatedAt > createdAt` (a dummyjson row the user changed after its last sync).
+  - **Map:** each row becomes a guest task with `title` from `todo`, `completed`, `dueDate: null`, `isSample: 0`, and the original timestamps. Its id is a **UUID v5 of the old id, namespaced by this database's `installId`**, using the `uuid` package. That makes it a valid `uuid` for the server table (Codex review 2), and it's the same on every retry, so the import stays idempotent. It's also different on every other device: two browsers both holding a dummyjson row 7 import different ids, so they can't overwrite each other after both sign in to the same account.
   - **Write insert-only:** use `bulkAdd`, and ignore per-row `ConstraintError`s. A row already imported, perhaps by another tab or an interrupted earlier run, is skipped rather than overwritten, so an edit made after import survives a re-run.
-  - **Delete the source last:** delete `TodoAppDB` only after the import transaction has committed. If anything fails, the source stays and the import retries on the next boot.
+  - **Keep the source:** record `importedAt` in `TodoAppDB`'s `cutover` store only after the destination transaction has committed. The source is **never deleted** in v1: it's a few kilobytes, and keeping it means a bug in this import can be fixed and re-run.
 - **Rewire the existing UI in this phase.** Replace `useTodos`, `useAddTodo`, `useUpdateTodo` and `useDeleteTodo` in `page.tsx`, `todoList.tsx`, `todoItem.tsx`, `addTodoForm.tsx`, `editTodoForm.tsx` and `createTodo.tsx` with the new hooks and repository. Keep their markup; Phase 4 replaces it. Update `todoItem.test.tsx` to render against `fake-indexeddb` instead of a `QueryClientProvider`.
 - **Then** delete `src/lib/indexedDB.ts`, `src/services/todoService.ts`, `src/features/todos/hooks/useTodos.ts`, TanStack Query and its devtools (decision 3), and `providers.tsx` if it's empty. No `fetch` remains anywhere.
 - **Loading vs empty**: `useLiveQuery` returns `undefined` until the first result arrives. The list treats `undefined` as loading and `[]` as empty, so the "No tasks" state never flashes on load.
@@ -136,7 +143,9 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
   - it imports user-created and user-modified rows and skips tombstoned and untouched dummyjson rows;
   - a re-run after an edit keeps the edit;
   - running it twice concurrently (two connections) creates no duplicates;
-  - an import that throws midway leaves `TodoAppDB` in place.
+  - an import that throws midway leaves `TodoAppDB` in place;
+  - **an old tab writing during migration:** a version-1 connection that ignores `versionchange` adds a row, and the cutover waits. When it closes, the row is imported. After that, a new version-1 open fails;
+  - every imported id is a valid UUID; the same old id under two different `installId`s gives two different ids; a retry gives the same id.
 - **Live query:** a component using `useTasks` re-renders after `add()` with no manual refresh.
 
 ## Phase 4 — Core task UI ◆
@@ -218,7 +227,7 @@ Merge `revamp` to `main` and deploy, so the live link on the resume shows a work
   - `due_date date`
   - `created_at`, `updated_at`, `completed_at`, `deleted_at` as `timestamptz` (`updated_at not null`)
   - `server_updated_at timestamptz not null default now()`
-  - an index on `(user_id, server_updated_at)`
+  - an index on `(user_id, server_updated_at, id)`, matching the pull's keyset order
 - **Row-level security**:
   - `alter table tasks enable row level security`, plus `revoke all on tasks from anon`.
   - Policies for `select`, `insert` and `update`, `to authenticated`, `using ((select auth.uid()) = user_id)`, with the same `with check` on insert and update.
@@ -229,6 +238,7 @@ Merge `revamp` to `main` and deploy, so the live link on the resume shows a work
   - if `new.updated_at <= old.updated_at`, the incoming fields are discarded and only the tombstone rule applies (last write wins, decided atomically in the database);
   - `updated_at` is clamped to at most `now() + interval '5 minutes'`;
   - `server_updated_at := now()`.
+- **Bounded transactions**: the migration sets `alter role authenticated set statement_timeout = '8s'`. Each PostgREST request is a single transaction, so a write can't commit more than 8s after its `server_updated_at` stamp. Phase 9's pull overlap relies on that bound.
 
   A `before insert` trigger applies the same clamp and sets `server_updated_at`.
 - **Client**: `@supabase/supabase-js` (2.x) with `createClient(url, publishableKey, { auth: { flowType: 'pkce', persistSession: true, detectSessionInUrl: true } })`.
@@ -271,17 +281,22 @@ Manually: sign up with email (confirmation arrives through custom SMTP), sign in
 **Changes**
 - **`src/features/tasks/sync/`** is an engine behind a `Remote` interface (`pull(since)`, `push(rows)`). It has a Supabase implementation and an in-memory fake for unit tests. The UI never calls it; it only writes to Dexie, and live queries pick up the result.
 - **Push**:
-  - Send rows with `ownerId = user` and `dirty = 1`, skipping tombstones still inside their undo window.
-  - Upsert them in batches of 100.
-  - On success, clear `dirty` in a transaction **only if the row's `updatedAt` is unchanged since it was read**. An edit made during the push stays dirty and goes out next time.
+  - Send rows with `ownerId = user` and `dirty = 1`, skipping tombstones still inside their undo window. Remember each row's `rev`.
+  - Upsert them in batches of 100 with `.select()`, so the response is the **authoritative row as the trigger stored it**: its winning fields, its clamped `updated_at` and its terminal `deleted_at`.
+  - **Acknowledge** in one transaction per batch:
+    - if a row's local `rev` still equals the sent `rev`, replace the local row with the server's row and clear `dirty`;
+    - if `rev` has moved on (an edit landed during the push), keep the local row and leave it dirty, so it goes out next time. Adopt only the server's `deletedAt` if it's set, because tombstones win.
+
+  A device whose clock runs fast therefore stores the server's clamped timestamp, not its own. Its local copy can't stay "ahead" of the server and win later comparisons (Codex review 2).
 - **Pull**:
-  - Fetch rows with `server_updated_at > meta.cursor[user]` in pages.
-  - Apply each in one transaction:
+  - Fetch rows with `server_updated_at >= meta.cursor[user] − 60s`, ordered by `(server_updated_at, id)`, in keyset pages (`> (last_ts, last_id)`), so equal timestamps can't fall between pages.
+  - The 60-second overlap covers late commits. `now()` is the transaction's *start* time, so a transaction stamped earlier can commit after a pull has moved past its stamp. The 8s statement timeout (Phase 8) bounds that lag, and 60s is well beyond it. Re-applying rows from the overlap is harmless because applying is idempotent.
+  - Apply each page in one transaction. The client doesn't compare timestamps:
     - an unknown id is inserted;
-    - if either side has `deletedAt`, the tombstone wins;
-    - otherwise the newer `updatedAt` wins, with ties going to the server;
-    - the losing local row has `dirty` cleared.
+    - a local row that isn't dirty is replaced by the server's row;
+    - a dirty local row is left alone (its push will let the trigger decide), except that the server's `deletedAt` is adopted if set.
   - Advance the cursor to the max `server_updated_at` seen, only after the page's transaction commits.
+- **Bootstrap**: with no cursor for the user, as on first sign-in or after sign-out, pull everything for that user from the beginning. That runs through the same apply rules, so retained dirty rows are kept and then pushed.
 - **When it runs**: on sign-in, when the tab becomes visible, on the `online` event, 2s after the last local write, and every 60s while the tab is visible. Failures back off exponentially up to 5 minutes. No realtime subscription in v1: it isn't needed for correctness, and it counts against the 200-connection limit.
 - **Unreachable backend**: a network error, a 5xx or a paused project sets the status to Offline or Accounts unavailable and nothing else. Dirty rows persist, so nothing queued is lost.
   - A signed-in user keeps working on the persisted session while offline.
@@ -293,7 +308,7 @@ Manually: sign up with email (confirmation arrives through custom SMTP), sign in
   - The offer is made once per account per device (a `meta` flag), and "Import tasks from this device" stays in the account menu afterwards.
 - **Sign out**: push first.
   - If dirty rows can't be pushed, warn "N changes haven't synced yet. They'll stay on this device and sync next time you sign in." Those rows are kept, hidden, under that `ownerId`, and never deleted.
-  - Synced rows for that user are removed from the device, so the next person on a shared device doesn't see them.
+  - Synced rows for that user are removed from the device, so the next person on a shared device doesn't see them. **The same transaction deletes `meta.cursor[user]`**, so the next sign-in bootstraps from scratch. Otherwise a pull from the old cursor would never bring back the unchanged rows that sign-out evicted (Codex review 2).
 - **Tombstone retention**:
   - Local tombstones for a signed-in user are purged once synced and older than 30 days.
   - Server tombstones are never purged, because they're what stops an old offline device from resurrecting a task.
@@ -304,7 +319,7 @@ The one place the rules need a tiebreak is a delete on device A against a later 
 
 Holding a delete locally for the 6s undo window means undo never has to travel over the network, which is what keeps tombstones terminal everywhere.
 
-Last-write-wins on client clocks lets a device with a fast clock win conflicts it shouldn't. The trigger's 5-minute clamp bounds how far ahead a clock can be; log the residual risk.
+The conflict rule runs in exactly one place: the Postgres trigger, which compares the incoming and stored `updated_at` inside the row lock. Clients never compare timestamps, they adopt the server's answer. So two devices can't reach different verdicts, and a fast clock is bounded by the 5-minute clamp on the server. Because clients adopt the clamped row on acknowledgement, the clamp actually sticks. The residual risk is that a clock up to 5 minutes fast can still win a conflict it shouldn't; log it.
 
 **Verified by**
 - **Unit tests** with two Dexie databases (two "devices") and the fake remote:
@@ -313,11 +328,16 @@ Last-write-wins on client clocks lets a device with a fast clock win conflicts i
   - undo within the window never sends a delete;
   - an edit made during a push isn't lost;
   - a device offline for a "week" pushes old-timestamp edits, and the other device pulls them (the cursor test);
+  - **late commit:** the fake remote hands out a row stamped *before* the current cursor after a pull has advanced, within the overlap, and the next pull applies it;
+  - **ties:** 250 rows share one `server_updated_at` across three pages, and all 250 arrive;
+  - **sign-out and back in:** after sign-out evicts synced rows, sign-in restores every row, and retained dirty rows survive and push;
+  - **fast clock:** device A's clock is 1 hour ahead. A edits, then B edits 10 minutes later in real time; both devices converge on B's edit, and A's local `updatedAt` equals the server's clamped value;
+  - **acknowledgement race:** an edit made between push and acknowledgement stays dirty and is pushed next time;
   - concurrent edits to different tasks are both kept, and on the same task the newer one wins;
   - the import is idempotent;
   - an unreachable remote leaves the app usable with dirty rows kept, and they sync once the remote returns;
   - sign-out with unsynced rows keeps them.
-- **`pnpm test:db`** runs the same delete-then-edit scenario with two real clients signed in as one user, plus the Phase 8 cross-user tests on synced data.
+- **`pnpm test:db`** runs the same delete-then-edit scenario with two real clients signed in as one user, plus the Phase 8 cross-user tests on synced data. It also runs two concurrent transactions to show that a later commit with an earlier `server_updated_at` is still pulled, and pushes an imported legacy task end to end.
 - **Manually**: two browsers signed in as one user, one in airplane mode; delete on one, edit on the other, reconnect, and the task is gone on both.
 
 ## Phase 10 — Installable and offline ◆
