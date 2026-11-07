@@ -9,6 +9,7 @@ import TodoItem from '../components/todoItem'
 // mocked at the module boundary because the real one reaches IndexedDB.
 const mutate = vi.fn()
 vi.mock('../hooks/useTodos', () => ({
+  // eslint-disable-next-line react-hooks-extra/no-unnecessary-use-prefix -- the key must match the real hook's export name
   useUpdateTodo: () => ({ mutate, isPending: false }),
 }))
 
