@@ -1,25 +1,38 @@
-import type { Todo } from '@/types/api'
+import type { Task } from '@/features/tasks/store/types'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TodoItem from '../components/todoItem'
 
 // Characterization test: it pins how today's TodoItem behaves so the test
-// setup is proven before Phase 4 replaces the component. The mutation hook is
-// mocked at the module boundary because the real one reaches IndexedDB.
-const mutate = vi.fn()
-vi.mock('../hooks/useTodos', () => ({
-  // eslint-disable-next-line react-hooks-extra/no-unnecessary-use-prefix -- the key must match the real hook's export name
-  useUpdateTodo: () => ({ mutate, isPending: false }),
-}))
+// setup is proven before Phase 4 replaces the component. The store's update()
+// is mocked at the module boundary, so the test checks exactly what the
+// component asks the store to do.
+const update = vi.fn(async () => ({}))
+vi.mock('@/features/tasks/store/repository', () => ({ update }))
 
-function makeTodo(overrides: Partial<Todo> = {}): Todo {
-  return { id: 7, todo: 'Buy oat milk', completed: false, userId: 1, ...overrides }
+const ID = '0f8b6c2e-3d1a-4b7e-9c55-2a6d8e1f4b90'
+function makeTodo(overrides: Partial<Task> = {}): Task {
+  return {
+    id: ID,
+    ownerId: 'guest',
+    title: 'Buy oat milk',
+    completed: false,
+    dueDate: null,
+    isSample: 0,
+    dirty: 0,
+    rev: 1,
+    createdAt: 0,
+    updatedAt: 0,
+    completedAt: null,
+    deletedAt: null,
+    ...overrides,
+  }
 }
 
 describe('todoItem', () => {
   beforeEach(() => {
-    mutate.mockClear()
+    update.mockClear()
   })
 
   it('renders the todo text as plain text, with no link to the removed detail page', () => {
@@ -37,7 +50,7 @@ describe('todoItem', () => {
     expect(screen.getByText('Buy oat milk')).not.toHaveClass('line-through')
   })
 
-  it('asks the update mutation to flip completion when the toggle is clicked', async () => {
+  it('asks the store to flip completion when the toggle is clicked', async () => {
     const user = userEvent.setup()
     render(<TodoItem todo={makeTodo({ completed: false })} showActions={false} />)
 
@@ -45,10 +58,10 @@ describe('todoItem', () => {
     // only button in the row. Phase 4 replaces it with a labelled checkbox.
     await user.click(screen.getByRole('button'))
 
-    expect(mutate).toHaveBeenCalledExactlyOnceWith({ id: 7, completed: true })
+    expect(update).toHaveBeenCalledExactlyOnceWith(ID, { completed: true })
   })
 
-  it('saves a trimmed edit on Enter', async () => {
+  it('saves an edit on Enter (the store trims it)', async () => {
     const user = userEvent.setup()
     render(<TodoItem todo={makeTodo()} />)
 
@@ -57,7 +70,7 @@ describe('todoItem', () => {
     await user.clear(input)
     await user.type(input, '  Buy oat milk and bread  {Enter}')
 
-    expect(mutate).toHaveBeenCalledExactlyOnceWith({ id: 7, todo: 'Buy oat milk and bread' })
+    expect(update).toHaveBeenCalledExactlyOnceWith(ID, { title: '  Buy oat milk and bread  ' })
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
   })
 })

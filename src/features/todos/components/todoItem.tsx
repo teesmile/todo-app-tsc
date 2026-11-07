@@ -1,42 +1,37 @@
 'use client'
 
-import type { Todo } from '@/types/api'
+import type { Task } from '@/features/tasks/store/types'
 import { Check, Edit2, X } from 'lucide-react'
 import { useState } from 'react'
-import { useUpdateTodo } from '../hooks/useTodos'
+import { useAction } from '@/features/tasks/hooks/useAction'
+import { update } from '@/features/tasks/store/repository'
 
 interface TodoItemProps {
-  todo: Todo
+  todo: Task
   showActions?: boolean
 }
 
 function TodoItem({ todo, showActions = true }: TodoItemProps) {
   const [isEditing, setIsEditing] = useState(false)
-  const [editText, setEditText] = useState(todo.todo)
+  const [editText, setEditText] = useState(todo.title)
 
-  const updateTodoMutation = useUpdateTodo()
+  const updateTask = useAction(update)
 
   const handleToggleComplete = () => {
-    updateTodoMutation.mutate({
-      id: todo.id,
-      completed: !todo.completed,
-    })
+    updateTask.fire(todo.id, { completed: !todo.completed })
   }
 
   const handleSaveEdit = () => {
     if (!editText.trim())
       return
 
-    updateTodoMutation.mutate({
-      id: todo.id,
-      todo: editText.trim(),
-    })
+    updateTask.fire(todo.id, { title: editText })
 
     setIsEditing(false)
   }
 
   const handleCancelEdit = () => {
-    setEditText(todo.todo)
+    setEditText(todo.title)
     setIsEditing(false)
   }
 
@@ -46,7 +41,7 @@ function TodoItem({ todo, showActions = true }: TodoItemProps) {
       <button
         type="button"
         onClick={handleToggleComplete}
-        disabled={updateTodoMutation.isPending}
+        disabled={updateTask.pending}
         className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
           todo.completed
             ? 'bg-orange-500 border-orange-500 text-white'
@@ -76,7 +71,7 @@ function TodoItem({ todo, showActions = true }: TodoItemProps) {
             )
           : (
               <span className={`block ${todo.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                {todo.todo}
+                {todo.title}
               </span>
             )}
       </div>
@@ -91,7 +86,7 @@ function TodoItem({ todo, showActions = true }: TodoItemProps) {
                     type="button"
                     onClick={handleSaveEdit}
                     className="p-1 text-orange-600 hover:text-orange-700"
-                    disabled={updateTodoMutation.isPending}
+                    disabled={updateTask.pending}
                     title="Save changes"
                   >
                     <Check className="w-8 h-8" />

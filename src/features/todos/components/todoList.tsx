@@ -3,7 +3,9 @@
 import { Edit2, Loader2, Trash2 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
-import { useDeleteTodo, useTodos } from '../hooks/useTodos'
+import { useAction } from '@/features/tasks/hooks/useAction'
+import { useTasks } from '@/features/tasks/store/hooks'
+import { remove } from '@/features/tasks/store/repository'
 import { CreateTodo } from './createTodo'
 
 import { EditTodoForm } from './editTodoForm'
@@ -17,10 +19,10 @@ export function TodoList() {
   const limit = searchParams?.get('limit') ? Number(searchParams.get('limit')) : 10
   const skip = (page - 1) * limit
 
-  const [editingTodo, setEditingTodo] = useState<number | null>(null)
+  const [editingTodo, setEditingTodo] = useState<string | null>(null)
 
-  const todoQuery = useTodos({ limit, skip })
-  const deleteTodo = useDeleteTodo()
+  const tasks = useTasks()
+  const deleteTask = useAction(remove)
 
   // Dynamic date generation
   const getCurrentDate = () => {
@@ -62,7 +64,7 @@ export function TodoList() {
     router.push(`/?${params.toString()}`)
   }
 
-  if (todoQuery.isLoading) {
+  if (tasks === undefined) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-16 w-16 animate-spin text-orange-500" />
@@ -70,20 +72,11 @@ export function TodoList() {
     )
   }
 
-  if (todoQuery.error) {
-    return (
-      <div className="text-center py-8">
-        <p className="text-red-500">Error loading todos</p>
-      </div>
-    )
-  }
-
-  const response = todoQuery.data
-  const todos = response?.todos || []
-  const total = response?.total || 0
+  const total = tasks.length
+  const todos = tasks.slice(skip, skip + limit)
   const totalPages = Math.ceil(total / limit)
 
-  if (!todos.length) {
+  if (!total) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 mb-4">No todos found</p>
@@ -100,7 +93,7 @@ export function TodoList() {
         <span className="text-orange-500 !important">{getTodayLabel()}</span>
       </div>
 
-      {deleteTodo.isError && (
+      {Boolean(deleteTask.error) && (
         <p role="alert" className="text-sm text-red-600">
           That task couldn't be deleted. Try again.
         </p>
@@ -163,10 +156,10 @@ export function TodoList() {
                       <button
                         type="button"
                         className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded disabled:opacity-50"
-                        aria-label={`Delete "${todo.todo}"`}
+                        aria-label={`Delete "${todo.title}"`}
                         title="Delete todo"
-                        disabled={deleteTodo.isPending}
-                        onClick={() => deleteTodo.mutate(todo.id)}
+                        disabled={deleteTask.pending}
+                        onClick={() => deleteTask.fire(todo.id)}
                       >
                         <Trash2 className="w-4 h-4" aria-hidden="true" />
                       </button>

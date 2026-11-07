@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useAddTodo } from '../hooks/useTodos'
+import { useAction } from '@/features/tasks/hooks/useAction'
+import { add } from '@/features/tasks/store/repository'
 
 interface AddTodoFormProps {
   onSuccess?: () => void
@@ -12,24 +13,20 @@ export function AddTodoForm({ onSuccess, onCancel }: AddTodoFormProps) {
   const [todo, setTodo] = useState('')
   const [completed, setCompleted] = useState(false)
 
-  const addTodoMutation = useAddTodo()
+  const addTask = useAction(add)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!todo.trim())
       return
 
-    addTodoMutation.mutate({
-      todo: todo.trim(),
-      completed,
-      userId: 1,
-    }, {
-      onSuccess: () => {
+    addTask.run({ title: todo, completed })
+      .then(() => {
         setTodo('')
         setCompleted(false)
         onSuccess?.()
-      },
-    })
+      })
+      .catch(() => {})
   }
 
   const handleCancel = () => {
@@ -72,16 +69,16 @@ export function AddTodoForm({ onSuccess, onCancel }: AddTodoFormProps) {
           type="button"
           onClick={handleCancel}
           className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-          disabled={addTodoMutation.isPending}
+          disabled={addTask.pending}
         >
           Cancel
         </button>
         <button
           type="submit"
           className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors"
-          disabled={addTodoMutation.isPending || !todo.trim()}
+          disabled={addTask.pending || !todo.trim()}
         >
-          {addTodoMutation.isPending ? 'Creating...' : 'Create Todo'}
+          {addTask.pending ? 'Creating...' : 'Create Todo'}
         </button>
       </div>
     </form>
