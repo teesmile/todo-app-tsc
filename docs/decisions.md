@@ -28,6 +28,21 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Phase 5: search, filters, URL state and shortcuts
+Decided by: Claude, building Phase 5 of the plan.
+Claim: a pure `filterTasks` (All, Active, Done, Today, Overdue, plus search) runs before grouping. The filter and search live in `?filter=&q=`. Stats come from `computeStats(tasks, today)` over every task. `n` and `/` are single-key shortcuts.
+Verdict: SHIPPED
+Because:
+- **Search** matches every word in any order, ignoring case and accents ("creme" finds "Crème brûlée"). Accents are stripped by code point, because a `\p{M}` regex needs an ES2018 TypeScript target and the lint rule rejects the raw range.
+- **Today and Overdue mean open tasks**; a finished task due today belongs to Done.
+- **The URL is written with `replaceState`, not new history entries.** Reload and shared links keep the view, and Back still leaves the page instead of stepping through filter clicks. The search's URL write is debounced 300 ms; filtering itself never is, so results never lag behind typing.
+- **The filters are native radios in a `<fieldset>`**, which gives arrow-key movement and "radio group, 3 of 5" for free. The radios are visually hidden and their labels draw the segmented control and its focus ring.
+- **Shortcuts are skipped only in text-entry fields** (text inputs, textareas, selects, contenteditable), so `n` still works from a task's checkbox, where keyboard users usually are. Ctrl, Meta and Alt are left alone. Escape leaves the search and keeps the query (Chrome would clear it).
+- **The rings are `role="img"`** with "40% completed: 2 of 5 tasks done", and the visible percentage is `aria-hidden` so it isn't read twice. A polite live region announces how many tasks a filter shows.
+
+Checked: 115 tests (stable over 3 runs), including `filterTasks` for each filter with search, `computeStats` on 0, 1 and 500 tasks, `n` typed in search, `/` and `n` from a checkbox, and `?filter=overdue` on reload. The typing-guard test fails with the guard removed. The browser checks (Phase 5, 11/11) use trusted key events. First Load JS went from 209.1 to 210.7 KB gzip.
+Study: roving focus and why native radios beat a custom `role="radiogroup"` (search "WAI-ARIA radio group pattern native").
+
 ## 2026-11-07 — Phase 4's Codex review skipped (usage limit); its two leads checked by hand
 Decided by: Anthony, because Codex hit its usage limit before finishing (the first run returned no structured findings; the second returned "You've hit your usage limit… try again at 10:28 AM").
 Claim: instead of waiting, investigate the two areas Codex's partial run named, test-first: (1) can a retried legacy import bring back a task deleted after the first import, and (2) can a save that finishes overwrite newer typing?

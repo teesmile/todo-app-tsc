@@ -176,6 +176,8 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
 **Verified by** `groupTasks` unit tests cover the end of a month, the end of a year, a leap day, overdue completed tasks (they go to Done, not Overdue) and null dates. Component tests check that add, edit (Enter, blur, Escape), toggle, delete, and undo restoring position all work, and that a double-click on Delete shows one toast. The full CRUD smoke check passes, delete included. `audit §1.3` can no longer happen: there is no "today label" function left.
 
 ## Phase 5 — Search, filters, stats, shortcuts ◆
+**Status: done.** The decisions are in `docs/decisions.md`.
+
 **Changes**
 - **Search** is a labelled `<input type="search">` that matches titles case- and accent-insensitively (`normalize('NFD')`). It's debounced only for the URL, not for filtering.
 - **Filters** are All, Active, Done, Today and Overdue, built as native radio inputs inside a `<fieldset>` with a legend, styled as a segmented control. Search and filter live in the URL (`?q=&filter=`) so Back and reload keep them.
