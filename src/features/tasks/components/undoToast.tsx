@@ -8,7 +8,7 @@ export interface Toast {
   id: string
   message: string
   /** One optional button: Undo after a delete, Show all for a hidden task. */
-  action?: { label: string, run: () => void }
+  action?: { label: string, run: () => void, keyshortcuts?: string, hint?: string }
   durationMs?: number
 }
 
@@ -59,9 +59,11 @@ export function UndoToast({ toast, onClose }: { toast: Toast | null, onClose: ()
             <button
               type="button"
               onClick={toast.action.run}
+              aria-keyshortcuts={toast.action.keyshortcuts}
               className="rounded px-2 py-1 font-semibold text-orange-300 hover:text-orange-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
             >
               {toast.action.label}
+              {toast.action.hint && <span className="ml-1 hidden font-normal text-gray-300 md:inline" aria-hidden="true">{toast.action.hint}</span>}
             </button>
           )}
         </div>

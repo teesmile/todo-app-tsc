@@ -86,8 +86,9 @@ export function LabelChooser({ value, onToggle, subject }: LabelChooserProps) {
         className="inline-flex min-h-8 items-center gap-1 rounded-full border border-gray-200 bg-white px-2.5 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
       >
         <Tag className="h-3.5 w-3.5" aria-hidden="true" />
-        {/* Icon-only on phones; the chips beside it already name the labels. */}
-        <span className="hidden md:inline">{chosen.length ? `Labels (${chosen.length})` : 'Label'}</span>
+        {/* Always "Labels", which the accessible name starts with (WCAG 2.5.3);
+            the chips beside it name the labels. Icon-only on phones. */}
+        <span className="hidden md:inline">Labels</span>
       </button>
 
       {open && (

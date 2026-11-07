@@ -16,6 +16,8 @@ interface TaskItemProps {
   onDelete: (task: Task) => void
   /** After a title or due-date edit saves, with the saved task. */
   onSaved?: (task: Task) => void
+  /** After completing or reopening saves, so the list can keep focus on it. */
+  onToggled?: (task: Task) => void
   /** `YYYY-MM-DD`, for the due chip's words. */
   today: string
   /** For "Added today, 9:30"; null until the browser's clock is read. */
@@ -31,7 +33,7 @@ interface TaskItemProps {
  * - a Delete button.
  * A failed save shows the error here and keeps the draft.
  */
-export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps) {
+export function TaskItem({ task, onDelete, onSaved, onToggled, today, now }: TaskItemProps) {
   const titleId = useId()
   const errorId = useId()
   const drafts = useEditDrafts()
@@ -153,7 +155,9 @@ export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps)
         <input
           type="checkbox"
           checked={task.completed}
-          onChange={() => toggle.fire(task.id, { completed: !task.completed })}
+          onChange={() => {
+            toggle.run(task.id, { completed: !task.completed }).then(saved => onToggled?.(saved), () => {})
+          }}
           aria-labelledby={titleId}
           data-task-id={task.id}
           className="h-5 w-5 accent-orange-500"

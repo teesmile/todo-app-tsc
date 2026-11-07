@@ -67,7 +67,7 @@ describe('the Today filter', () => {
   it('gives a task added while it is on today as its due date, and shows that on the chip', async () => {
     const user = await renderList('/?filter=today')
     const form = screen.getByLabelText('New task').closest('form')!
-    expect(within(form).getByRole('button', { name: /^Due date for the new task/ })).toHaveTextContent('Due today')
+    expect(within(form).getByRole('button', { name: /due date for the new task/i })).toHaveTextContent('Due today')
 
     await user.type(screen.getByLabelText('New task'), 'Pick up the parcel{Enter}')
     await waitFor(async () => expect((await listTasks()).find(t => t.title === 'Pick up the parcel')?.dueDate).toBe(today))
@@ -78,7 +78,7 @@ describe('the Today filter', () => {
   it('lets the default be changed before adding', async () => {
     const user = await renderList('/?filter=today')
     await user.type(screen.getByLabelText('New task'), 'Someday task')
-    await user.click(screen.getByRole('button', { name: /^Due date for the new task/ }))
+    await user.click(screen.getByRole('button', { name: /due date for the new task/i }))
     await user.click(screen.getByRole('button', { name: 'No due date' }))
     await user.click(screen.getByRole('button', { name: 'Add task' }))
 

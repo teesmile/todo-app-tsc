@@ -256,6 +256,8 @@ The migration is additive because the bar is that nothing the user wrote is ever
 - **Browser checks:** the layout screenshots at 360, 390 and 768 still show no overlap or sideways scroll with labels on the rows, and the smoke checks still pass.
 
 ## Phase 8 — Accessibility pass
+**Status: done, except the screen-reader run**, which needs a person with Orca and VoiceOver. A script for it is below. The decisions are in `docs/decisions.md`.
+
 **Changes**
 - Each group is a `<section>` with a heading, holding a `<ul>` (built in Phase 4; check it here). There's one `<h1>`.
 - A skip link and visible `:focus-visible` rings.
@@ -266,6 +268,19 @@ The migration is additive because the bar is that nothing the user wrote is ever
 **Why** Phases 4–6 build accessibility in as they go. This phase is the outside check that it actually works together, because axe catches roughly a third of real issues and a screen reader catches the rest.
 
 **Verified by** axe reports zero violations in the component tests. A keyboard-only run covers every feature without the mouse. A screen-reader run (Orca on Linux, plus VoiceOver on a phone) covers add, complete, edit, delete and undo, with each change heard. Lighthouse Accessibility scores 100.
+
+**How it was actually verified:**
+- **`axe-core` 4.14 directly**, in place of the `vitest-axe` wrapper (0.1.0, years old). In jsdom it runs on the home page, the open Due and Label choosers, the labels manager and the sheet.
+- **Contrast, which jsdom can't compute,** is checked by injecting axe into the production build in Chromium, at 360 and 768, with all eight label colours on rows, plus the open sheet and the manager. This stands in for Lighthouse, whose accessibility score is these same axe rules.
+- **The keyboard-only run uses trusted key events:** skip link, `n`, add, Tab to the task, Space to complete, Enter to edit, Tab to Delete, and Ctrl+Z to undo.
+
+**Screen-reader script (still to do by hand),** with Orca in Firefox or Chrome on Linux, and VoiceOver in Safari on an iPhone:
+1. Load the app. The first Tab reads "Skip to tasks"; Enter lands on the task list.
+2. Press `n` (desktop) or tap "Add a task" (phone). You hear the "New task" field. Type a title and press Enter. You hear "Added …" only if the current view hides it; otherwise the new row is there.
+3. Tab to its checkbox (named by the title) and press Space. You hear "Completed …", and focus is still on that task, now under Done.
+4. Activate "Edit "…"", change the text and press Enter. Focus returns to the title.
+5. Activate "Delete "…"". You hear "Deleted …". Press Ctrl+Z (⌘Z on a Mac). You hear "Restored …", and focus is on the task.
+6. Open the Due chip ("Due date for …: none") and choose Tomorrow. Open the Labels chip and tick one. Each change is heard on the chip.
 
 ### Checkpoint — ship the guest app
 Merge `revamp` to `main` and deploy, so the live link on the resume shows a working app while Phases 9–11 are built. Before merging, update the README's top section with a one-line pitch, a screenshot and the live link; Phase 12 does the full README. **Verified by** the CRUD smoke check on the production URL, on a phone.

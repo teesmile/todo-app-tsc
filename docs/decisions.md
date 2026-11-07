@@ -28,6 +28,21 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Phase 8: the accessibility pass, and what it found
+Decided by: Claude, running Phase 8 of the plan.
+Claim: check accessibility from outside: axe in jsdom on every view, axe in the real browser for contrast, and a keyboard-only run with real keys. Fix what they find. Leave the screen-reader run to a person, with a script.
+Verdict: SHIPPED; the screen-reader run is outstanding (it needs Orca and VoiceOver, which I can't drive)
+Because the pass found six real problems, all fixed:
+- **Completing a task dropped focus.** The row moves to Done and unmounts. Focus targets can now name the group to wait for, so focus follows the task, and completion is announced.
+- **Undo was out of reach by keyboard** within its 6s window, dozens of Tabs away (WCAG 2.2.1). Ctrl/⌘+Z now undoes, except in a text field that has text of its own to undo.
+- **Deleting the last task in a group sent focus to the add field**, where Ctrl+Z belongs to the field. Focus now goes to the neighbouring group's heading, so it stays in the list.
+- **The group counts ("(1)") were gray-400 on white**, about 2.5:1; now gray-500, about 4.8:1.
+- **The Due and Label chips' accessible names didn't contain their visible words** (WCAG 2.5.3, label in name). The Due chip's name now starts with what it shows ("Due today, due date for …"), and the Label chip always shows "Labels".
+- **There was no skip link**; there is now one to the task list. A global `:focus-visible` outline is a safety net for anything without its own ring.
+
+Tooling: `axe-core` directly instead of `vitest-axe` 0.1.0, and in-browser axe instead of Lighthouse (the same rules). Checked: 200 tests stable over 3 runs; in-browser axe zero violations on 4 views; the keyboard run 16/16; smoke checks and layout pass.
+Study: WCAG 2.5.3 Label in Name, and focus management when content moves (search "label in name voice control", "managing focus list reorder").
+
 ## 2026-11-07 — Codex review 7 (Phase 7): label writes that break Undo or drop changes
 Codex challenged: (1) deleting a label bumps the `rev` of a tombstoned task, so that task's pending Undo token no longer matches and Undo fails; (2) ticking a label sends the whole rendered list, so two tabs (or two quick clicks) adding different labels drop one; (3) an untouched label-name field writes the old name back over another tab's rename.
 Verdict: AGREE on all three
