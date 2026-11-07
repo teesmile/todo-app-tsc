@@ -10,6 +10,21 @@ interface TodoRecord {
   deletedAt?: Date
 }
 
+/**
+ * Settles when a readwrite transaction finishes. A write isn't durable until
+ * `complete` fires: a request can succeed and its transaction still abort
+ * (quota, or an explicit abort), rolling the write back with no request error.
+ * Resolving on the request's success would report a write that never landed,
+ * and listening only for `complete` and `error` would hang on an abort.
+ */
+function settle<T>(transaction: IDBTransaction, value: () => T): Promise<T> {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve(value())
+    transaction.onabort = () => reject(transaction.error ?? new DOMException('Transaction aborted', 'AbortError'))
+    transaction.onerror = () => reject(transaction.error)
+  })
+}
+
 class TodoIndexedDB {
   private dbName = 'TodoAppDB'
   private version = 1
@@ -89,14 +104,9 @@ class TodoIndexedDB {
       updatedAt: now,
     }
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['todos'], 'readwrite')
-      const store = transaction.objectStore('todos')
-      const request = store.put(todoRecord)
-
-      request.onsuccess = () => resolve(todoRecord)
-      request.onerror = () => reject(request.error)
-    })
+    const transaction = this.db!.transaction(['todos'], 'readwrite')
+    transaction.objectStore('todos').put(todoRecord)
+    return settle(transaction, () => todoRecord)
   }
 
   /**
@@ -109,52 +119,47 @@ class TodoIndexedDB {
    */
   async updateTodo(id: number, patch: Partial<Pick<TodoRecord, 'todo' | 'completed'>>): Promise<TodoRecord> {
     await this.ensureConnection()
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['todos'], 'readwrite')
-      const store = transaction.objectStore('todos')
-      let updated: TodoRecord | undefined
+    const transaction = this.db!.transaction(['todos'], 'readwrite')
+    const store = transaction.objectStore('todos')
+    let updated: TodoRecord | undefined
+    let missing = false
+    const committed = settle(transaction, () => updated!)
 
-      const getRequest = store.get(id)
-      getRequest.onsuccess = () => {
-        const current: TodoRecord | undefined = getRequest.result
-        if (!current || current.deletedAt) {
-          transaction.abort()
-          reject(new Error('Todo not found'))
-          return
-        }
-        // Drop undefined keys so `{ todo: undefined }` can't wipe the title.
-        const changes = Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined))
-        updated = { ...current, ...changes, isSynced: false, updatedAt: new Date() }
-        store.put(updated)
+    const getRequest = store.get(id)
+    getRequest.onsuccess = () => {
+      const current: TodoRecord | undefined = getRequest.result
+      if (!current || current.deletedAt) {
+        missing = true
+        transaction.abort()
+        return
       }
-      transaction.oncomplete = () => resolve(updated!)
-      transaction.onerror = () => reject(transaction.error)
+      // Drop undefined keys so `{ todo: undefined }` can't wipe the title.
+      const changes = Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined))
+      updated = { ...current, ...changes, isSynced: false, updatedAt: new Date() }
+      store.put(updated)
+    }
+
+    return committed.catch((error) => {
+      throw missing ? new Error('Todo not found') : error
     })
   }
 
   async deleteTodo(id: number): Promise<void> {
     await this.ensureConnection()
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['todos'], 'readwrite')
-      const store = transaction.objectStore('todos')
+    const transaction = this.db!.transaction(['todos'], 'readwrite')
+    const store = transaction.objectStore('todos')
 
-      // Soft delete - mark as deleted instead of removing
-      const getRequest = store.get(id)
-      getRequest.onsuccess = () => {
-        const todo = getRequest.result
-        if (todo) {
-          todo.deletedAt = new Date()
-          todo.updatedAt = new Date()
-          const putRequest = store.put(todo)
-          putRequest.onsuccess = () => resolve()
-          putRequest.onerror = () => reject(putRequest.error)
-        }
-        else {
-          resolve()
-        }
+    // Soft delete: mark as deleted instead of removing.
+    const getRequest = store.get(id)
+    getRequest.onsuccess = () => {
+      const todo = getRequest.result
+      if (todo) {
+        todo.deletedAt = new Date()
+        todo.updatedAt = new Date()
+        store.put(todo)
       }
-      getRequest.onerror = () => reject(getRequest.error)
-    })
+    }
+    return settle(transaction, () => undefined)
   }
 
   async getUnsyncedTodos(): Promise<TodoRecord[]> {
