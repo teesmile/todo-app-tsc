@@ -26,6 +26,8 @@ export function TaskItem({ task, onDelete }: TaskItemProps) {
   const errorId = useId()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(task.title)
+  // The latest typed text, readable after an await without a stale closure.
+  const draftRef = useRef(task.title)
   const saveTitle = useAction(update)
   const toggle = useAction(update)
   const setDue = useAction(update)
@@ -45,23 +47,38 @@ export function TaskItem({ task, onDelete }: TaskItemProps) {
     wasEditing.current = editing
   }, [editing])
 
+  function changeDraft(value: string) {
+    draftRef.current = value
+    setDraft(value)
+  }
+
   function startEditing() {
     settled.current = false
-    setDraft(task.title)
+    changeDraft(task.title)
     setEditing(true)
   }
 
   async function commit() {
     if (settled.current)
       return
-    if (draft.trim() === task.title) {
+    if (draftRef.current.trim() === task.title) {
       settled.current = true
       setEditing(false)
       return
     }
     settled.current = true
+    const submitted = draftRef.current
     try {
-      await saveTitle.run(task.id, { title: draft })
+      await saveTitle.run(task.id, { title: submitted })
+      if (draftRef.current !== submitted) {
+        // More was typed while that save was in flight (found in place of
+        // Phase 4's review). Keep it: stay open, or save it straight
+        // away if focus has already left the field.
+        settled.current = false
+        if (document.activeElement !== inputRef.current)
+          commit()
+        return
+      }
       setEditing(false)
     }
     catch {
@@ -72,7 +89,7 @@ export function TaskItem({ task, onDelete }: TaskItemProps) {
 
   function cancel() {
     settled.current = true
-    setDraft(task.title)
+    changeDraft(task.title)
     setEditing(false)
   }
 
@@ -98,7 +115,7 @@ export function TaskItem({ task, onDelete }: TaskItemProps) {
                 ref={inputRef}
                 type="text"
                 value={draft}
-                onChange={e => setDraft(e.target.value)}
+                onChange={e => changeDraft(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault()

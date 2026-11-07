@@ -19,10 +19,13 @@ export function AddTaskForm({ titleRef }: { titleRef?: Ref<HTMLInputElement> }) 
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
+    const submitted = { title, dueDate }
     try {
       await addTask.run({ title, dueDate: dueDate || null })
-      setTitle('')
-      setDueDate('')
+      // Clear only what was submitted: text typed while the add was in
+      // flight is the next task, not something to throw away.
+      setTitle(current => (current === submitted.title ? '' : current))
+      setDueDate(current => (current === submitted.dueDate ? '' : current))
     }
     catch {
       // Shown below; the draft stays.

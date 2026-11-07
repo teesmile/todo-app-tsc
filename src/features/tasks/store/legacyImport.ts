@@ -20,11 +20,17 @@ import { GUEST } from './types'
  *    database's installId: valid for the server's uuid key, the same on every
  *    retry, and different on every other device. An id that's already there
  *    (another tab, an earlier interrupted run) is skipped, never overwritten.
- * 4. Record `importedAt` in the source only after the destination committed,
- *    and never delete the source.
+ * 4. Mark the import done in the destination, in the same transaction as
+ *    the inserts, so they land together or not at all. A later run sees the
+ *    marker and stops, so it can never re-insert a task the user deleted
+ *    after the import, even once that task's tombstone has been purged
+ *    (found in place of Phase 4's review). The source gets a marker
+ *    too, as a hint, and is never deleted.
  */
 
 export const LEGACY_DB_NAME = 'TodoAppDB'
+/** Key in the tasks database's `meta` store: the authoritative "imported" marker. */
+export const LEGACY_IMPORTED_KEY = 'legacyImportedAt'
 const CUTOVER_VERSION = 2
 const CUTOVER_STORE = 'cutover'
 const CUTOVER_KEY = 'state'
@@ -147,6 +153,9 @@ export interface LegacyImportOptions {
 }
 
 export async function runLegacyImport({ db = getDb(), factory = globalThis.indexedDB, onBlocked = () => {} }: LegacyImportOptions = {}): Promise<LegacyImportResult> {
+  if (await db.meta.get(LEGACY_IMPORTED_KEY))
+    return { status: 'already-imported' }
+
   const legacy = await openForCutover(factory, onBlocked)
   if (!legacy)
     return { status: 'no-legacy-db' }
@@ -166,27 +175,38 @@ export async function runLegacyImport({ db = getDb(), factory = globalThis.index
     const installId = await getInstallId(db)
     const tasks = selectUserRows(rows).map(row => mapLegacyRow(row, installId))
 
-    let skipped = 0
-    try {
-      await db.tasks.bulkAdd(tasks)
-    }
-    catch (error) {
-      if (!(error instanceof Dexie.BulkError))
-        throw error
-      // Rows from an earlier run or another tab are already there: insert-only
-      // means skip them, so an edit made after that import survives.
-      const failures = error.failures
-      if (failures.some(failure => failure.name !== 'ConstraintError'))
-        throw error
-      skipped = failures.length
-    }
+    // The inserts and the marker commit together. Another tab running this at
+    // the same moment is serialised behind this transaction, sees the marker
+    // and stops.
+    const outcome = await db.transaction('rw', db.tasks, db.meta, async () => {
+      if (await db.meta.get(LEGACY_IMPORTED_KEY))
+        return null
+      let skipped = 0
+      try {
+        await db.tasks.bulkAdd(tasks)
+      }
+      catch (error) {
+        if (!(error instanceof Dexie.BulkError))
+          throw error
+        // Insert-only: a row that's already there is skipped, never overwritten.
+        const failures = error.failures
+        if (failures.some(failure => failure.name !== 'ConstraintError'))
+          throw error
+        skipped = failures.length
+      }
+      await db.meta.put({ key: LEGACY_IMPORTED_KEY, value: Date.now() })
+      return { imported: tasks.length - skipped, skipped }
+    })
+    if (!outcome)
+      return { status: 'already-imported' }
 
-    // Only now that the destination has committed.
+    // The source's own marker is only a hint for old code paths; the
+    // destination marker above is what stops a re-run.
     const writeTx = legacy.transaction(CUTOVER_STORE, 'readwrite')
     writeTx.objectStore(CUTOVER_STORE).put({ key: CUTOVER_KEY, importedAt: Date.now() })
     await done(writeTx)
 
-    return { status: 'imported', imported: tasks.length - skipped, skipped }
+    return { status: 'imported', ...outcome }
   }
   finally {
     legacy.close()
