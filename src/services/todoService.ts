@@ -53,18 +53,8 @@ class TodoService {
   }
 
   // Update todo (local-first)
-  async updateTodo(data: UpdateTodoData) {
-    const existingTodo = await todoIndexedDB.getTodo(data.id)
-    if (!existingTodo) {
-      throw new Error('Todo not found')
-    }
-
-    const updatedTodo = await todoIndexedDB.saveTodo({
-      ...existingTodo,
-      ...data,
-      isSynced: false, // Mark as unsynced after update
-    })
-
+  async updateTodo({ id, ...patch }: UpdateTodoData) {
+    const updatedTodo = await todoIndexedDB.updateTodo(id, patch)
     return this.mapToTodoResponse(updatedTodo)
   }
 

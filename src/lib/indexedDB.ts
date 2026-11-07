@@ -99,6 +99,39 @@ class TodoIndexedDB {
     })
   }
 
+  /**
+   * Applies `patch` to the stored row inside one readwrite transaction.
+   * Reading and writing in separate transactions let a delete or another
+   * edit commit in between, which the write then overwrote: the deleted row
+   * came back (it was rebuilt without `deletedAt`) or the other edit was lost.
+   * IndexedDB serialises overlapping readwrite transactions, so nothing can
+   * land between this read and this write. Resolves once the write commits.
+   */
+  async updateTodo(id: number, patch: Partial<Pick<TodoRecord, 'todo' | 'completed'>>): Promise<TodoRecord> {
+    await this.ensureConnection()
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['todos'], 'readwrite')
+      const store = transaction.objectStore('todos')
+      let updated: TodoRecord | undefined
+
+      const getRequest = store.get(id)
+      getRequest.onsuccess = () => {
+        const current: TodoRecord | undefined = getRequest.result
+        if (!current || current.deletedAt) {
+          transaction.abort()
+          reject(new Error('Todo not found'))
+          return
+        }
+        // Drop undefined keys so `{ todo: undefined }` can't wipe the title.
+        const changes = Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined))
+        updated = { ...current, ...changes, isSynced: false, updatedAt: new Date() }
+        store.put(updated)
+      }
+      transaction.oncomplete = () => resolve(updated!)
+      transaction.onerror = () => reject(transaction.error)
+    })
+  }
+
   async deleteTodo(id: number): Promise<void> {
     await this.ensureConnection()
     return new Promise((resolve, reject) => {
