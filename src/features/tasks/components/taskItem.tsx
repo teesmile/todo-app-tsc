@@ -12,6 +12,8 @@ import { DueChooser } from './dueChooser'
 interface TaskItemProps {
   task: Task
   onDelete: (task: Task) => void
+  /** After a title or due-date edit saves, with the saved task. */
+  onSaved?: (task: Task) => void
   /** `YYYY-MM-DD`, for the due chip's words. */
   today: string
   /** For "Added today, 9:30"; null until the browser's clock is read. */
@@ -27,7 +29,7 @@ interface TaskItemProps {
  * - a Delete button.
  * A failed save shows the error here and keeps the draft.
  */
-export function TaskItem({ task, onDelete, today, now }: TaskItemProps) {
+export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps) {
   const titleId = useId()
   const errorId = useId()
   const [editing, setEditing] = useState(false)
@@ -75,7 +77,8 @@ export function TaskItem({ task, onDelete, today, now }: TaskItemProps) {
     settled.current = true
     const submitted = draftRef.current
     try {
-      await saveTitle.run(task.id, { title: submitted })
+      const saved = await saveTitle.run(task.id, { title: submitted })
+      onSaved?.(saved)
       if (draftRef.current !== submitted) {
         // More was typed while that save was in flight (found in place of
         // Phase 4's review). Keep it: stay open, or save it straight
@@ -161,7 +164,9 @@ export function TaskItem({ task, onDelete, today, now }: TaskItemProps) {
           <span className="text-xs text-gray-500">{now ? formatAdded(task.createdAt, now) : ''}</span>
           <DueChooser
             value={task.dueDate}
-            onChange={dueDate => setDue.fire(task.id, { dueDate })}
+            onChange={(dueDate) => {
+              setDue.run(task.id, { dueDate }).then(saved => onSaved?.(saved), () => {})
+            }}
             today={today}
             subject={`"${task.title}"`}
           />

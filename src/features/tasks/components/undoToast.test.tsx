@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { UNDO_WINDOW_MS } from '../store/repository'
 import { UndoToast } from './undoToast'
 
-const toast = { id: 't1', message: 'Deleted "Pay rent"', onUndo: () => {} }
+const toast = { id: 't1', message: 'Deleted "Pay rent"', action: { label: 'Undo', run: () => {} } }
 
 describe('undoToast', () => {
   beforeEach(() => {

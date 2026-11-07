@@ -114,13 +114,38 @@ export function TaskList() {
       if (token) {
         requestFocus(target)
         const what = `"${task.title}"`
-        setToast({ id: crypto.randomUUID(), message: `Deleted ${what}`, onUndo: () => undo([token], what) })
+        setToast({ id: crypto.randomUUID(), message: `Deleted ${what}`, action: { label: 'Undo', run: () => undo([token], what) } })
       }
     }
     catch (err) {
       setError(err)
     }
   }, [groups, undo, requestFocus])
+
+  /**
+   * After an add or an edit: if the current search or filter hides the task,
+   * say so and offer Show all, so a save never looks like a disappearance.
+   * (Found by the Phase 5 hand checks.) Returns whether it was hidden.
+   */
+  function reportIfHidden(task: Task, verb: 'Added' | 'Saved'): boolean {
+    if (filterTasks([task], { filter, query }, today).length > 0)
+      return false
+    setToast({
+      id: crypto.randomUUID(),
+      message: `${verb} "${task.title}", but the current search or filter hides it.`,
+      action: {
+        label: 'Show all',
+        run: () => {
+          // Query first: setFilter writes the URL with the latest query.
+          setQuery('')
+          setFilter('all')
+          setToast(null)
+          requestFocus({ kind: 'row', id: task.id })
+        },
+      },
+    })
+    return true
+  }
 
   async function handleClearSamples() {
     try {
@@ -129,7 +154,7 @@ export function TaskList() {
       if (tokens.length) {
         requestFocus({ kind: 'add' })
         const what = `${tokens.length} sample task${tokens.length === 1 ? '' : 's'}`
-        setToast({ id: crypto.randomUUID(), message: `Cleared ${what}`, onUndo: () => undo(tokens, what) })
+        setToast({ id: crypto.randomUUID(), message: `Cleared ${what}`, action: { label: 'Undo', run: () => undo(tokens, what) } })
       }
     }
     catch (err) {
@@ -141,7 +166,7 @@ export function TaskList() {
     <div ref={listRef} className="space-y-5">
       {/* Inline from tablet width; on phones the floating button opens the sheet. */}
       <div className="hidden md:block">
-        <AddTaskForm titleRef={addRef} today={today} defaultDue={defaultDue} />
+        <AddTaskForm titleRef={addRef} today={today} defaultDue={defaultDue} onAdded={task => reportIfHidden(task, 'Added')} />
       </div>
 
       <TaskToolbar
@@ -174,7 +199,7 @@ export function TaskList() {
                     : `No ${FILTER_LABELS[filter].toLowerCase()} tasks.`}
               </p>
             )
-          : groups.map(group => <TaskGroup key={group.key} group={group} onDelete={handleDelete} today={today} now={now} />)}
+          : groups.map(group => <TaskGroup key={group.key} group={group} onDelete={handleDelete} onSaved={task => reportIfHidden(task, 'Saved')} today={today} now={now} />)}
 
       {hasSamples && (
         <div className="border-t border-gray-100 pt-4">
@@ -193,7 +218,10 @@ export function TaskList() {
         onOpenChange={setSheetOpen}
         today={today}
         defaultDue={defaultDue}
-        onAdded={task => setToast({ id: crypto.randomUUID(), message: `Added "${task.title}"`, durationMs: 3000 })}
+        onAdded={(task) => {
+          if (!reportIfHidden(task, 'Added'))
+            setToast({ id: crypto.randomUUID(), message: `Added "${task.title}"`, durationMs: 3000 })
+        }}
       />
       <UndoToast toast={toast} onClose={closeToast} />
     </div>

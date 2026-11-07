@@ -25,6 +25,15 @@ if (!HTMLDialogElement.prototype.showModal) {
       ?? this.querySelector<HTMLElement>('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])')
     target?.focus()
   }
+  // A browser treats an unhandled Escape as a close request for the top
+  // modal dialog. Anything that calls preventDefault (or stops the event)
+  // keeps the dialog open, as in Chrome and Firefox.
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || event.defaultPrevented)
+      return
+    const open = [...document.querySelectorAll('dialog[open]')].at(-1) as HTMLDialogElement | undefined
+    open?.close()
+  })
   HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
     if (!this.hasAttribute('open'))
       return
