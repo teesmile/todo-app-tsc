@@ -43,20 +43,42 @@ const getStatus = () => currentStatus
 // The server render never imports anything.
 const getServerStatus = (): LegacyImportStatus => 'running'
 
+function startImport(): Promise<unknown> {
+  setStatus('running')
+  importRun = runLegacyImport({ onBlocked: () => setStatus('blocked') })
+    .then(() => setStatus('done'))
+    .catch((error) => {
+      console.error('Bringing over tasks from the old version failed. The old data is untouched.', error)
+      setStatus('failed')
+    })
+  return importRun
+}
+
+/**
+ * Runs the import again after a failure, without a reload. Safe to call any
+ * number of times: the import is insert-only, and it does nothing once
+ * `importedAt` is recorded.
+ */
+export function retryLegacyImport(): Promise<unknown> {
+  return startImport()
+}
+
+/** Forgets the shared run and status. Tests only. */
+export function resetLegacyImportForTests(): void {
+  importRun = null
+  currentStatus = 'running'
+}
+
 /**
  * Starts the one-time legacy import and reports its status. `blocked` means
  * an old tab of the app is holding the old database open; the import resumes
- * by itself once that tab closes. A failed import keeps the source, so the
- * next visit retries it.
+ * by itself once that tab closes. `failed` means nothing was lost: the source
+ * is kept, and `retryLegacyImport` (or the next visit) tries again.
  */
 export function useLegacyImport(): LegacyImportStatus {
   useEffect(() => {
-    importRun ??= runLegacyImport({ onBlocked: () => setStatus('blocked') })
-      .then(() => setStatus('done'))
-      .catch((error) => {
-        console.error('Bringing over tasks from the old version failed; it will retry on the next visit.', error)
-        setStatus('failed')
-      })
+    if (!importRun)
+      startImport()
   }, [])
 
   return useSyncExternalStore(subscribe, getStatus, getServerStatus)

@@ -11,6 +11,11 @@ import { GUEST } from './types'
  * commit and rejects if the transaction aborts.
  */
 
+/**
+ * The longest title you can type. Tasks brought over from the old app may be
+ * longer, because it had no limit, and they're kept whole (Codex review 5).
+ * An edit may keep or shorten such a title, but never grow it.
+ */
 export const MAX_TITLE_LENGTH = 500
 
 export class TaskNotFoundError extends Error {
@@ -20,12 +25,19 @@ export class TaskNotFoundError extends Error {
   }
 }
 
-function cleanTitle(title: string): string {
+export class TitleError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'TitleError'
+  }
+}
+
+function cleanTitle(title: string, allowedLength = MAX_TITLE_LENGTH): string {
   const trimmed = title.trim()
   if (!trimmed)
-    throw new Error('A task needs a title')
-  if (trimmed.length > MAX_TITLE_LENGTH)
-    throw new Error(`A task title can be at most ${MAX_TITLE_LENGTH} characters`)
+    throw new TitleError('A task needs a title.')
+  if (trimmed.length > allowedLength)
+    throw new TitleError(`A task title can be at most ${allowedLength} characters.`)
   return trimmed
 }
 
@@ -78,7 +90,7 @@ export async function update(id: string, patch: TaskPatch, { db = getDb() }: { d
     const next: Task = { ...current, updatedAt: now, dirty: 1, rev: current.rev + 1 }
 
     if (patch.title !== undefined) {
-      next.title = cleanTitle(patch.title)
+      next.title = cleanTitle(patch.title, Math.max(MAX_TITLE_LENGTH, current.title.length))
       if (next.title !== current.title)
         next.isSample = 0
     }

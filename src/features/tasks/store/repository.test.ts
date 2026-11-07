@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDb, resetDbForTests, TasksDB } from './db'
-import { add, clearSamples, listTasks, remove, TaskNotFoundError, undoRemove, update } from './repository'
+import { add, clearSamples, listTasks, MAX_TITLE_LENGTH, remove, TaskNotFoundError, TitleError, undoRemove, update } from './repository'
 
 // Reopening the database is what a page reload does: a new connection, the
 // same stored data.
@@ -48,8 +48,10 @@ describe('persistence', () => {
     expect((await getDb().tasks.get(task.id))?.deletedAt).not.toBeNull()
   })
 
-  it('rejects an empty title', async () => {
+  it('rejects an empty title, and one longer than the limit', async () => {
     await expect(add({ title: '   ' })).rejects.toThrow('A task needs a title')
+    await expect(add({ title: 'x'.repeat(MAX_TITLE_LENGTH + 1) })).rejects.toBeInstanceOf(TitleError)
+    expect((await add({ title: 'x'.repeat(MAX_TITLE_LENGTH) })).title).toHaveLength(MAX_TITLE_LENGTH)
   })
 })
 
