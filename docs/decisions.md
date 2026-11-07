@@ -28,6 +28,14 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Dexie + useLiveQuery as the task store (f610633)
+Decided by: Anthony (owner direction): use Dexie unless Phase 3 finds a concrete reason against it.
+Claim: IndexedDB through Dexie 4.4, read with `dexie-react-hooks`' `useLiveQuery`, replacing TanStack Query and the hand-written wrapper.
+Verdict: SHIPPED; no concrete reason against
+Because: the two open checks both came back clean. The static export prerenders `/` with no IndexedDB error: the instance is created on first use, never at module load. First Load JS for `/` went from 186.3 to 208.5 KB gzipped (+22.2 KB), net of removing TanStack Query. In return, `populate` gives seed-once inside the creation transaction, and every repository write is a read-check-write whose promise settles on commit or abort. Live queries also re-run on writes from other tabs, which the `idb` + `useSyncExternalStore` alternative would need a `BroadcastChannel` to match; that's what made Dexie win over a smaller hand-built store.
+Also decided here: undo tokens carry `rev`, not `deletedAt`, because two deletes in the same millisecond share a timestamp and an old token could undo a newer delete (tested with a frozen clock). And `fake-indexeddb` loads from its own first setup file, because the import sorter moved it below `dexie`, which captures `indexedDB` at import.
+Study: Dexie's liveQuery and how it tracks which keys a query read (search "Dexie liveQuery observability").
+
 ## 2026-11-07 — Codex review 4: Phase 2 left no way to delete a task
 Codex challenged: removing the detail route also removed the only Delete control, so users can't remove tasks. The plan's "nothing working is lost" overlooked that Phase 0 had already made those deletes persist.
 Verdict: AGREE; DISAGREE only with "not shippable", since `revamp` doesn't deploy until the checkpoint after Phase 7

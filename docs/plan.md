@@ -74,6 +74,8 @@ These come out of Codex reviews 1 and 2. Any phase that breaks one has failed, w
 **Verified by** `pnpm build` route list shows `/` and `/_not-found` only. `grep -rn "todos/\${\|/todos/" src` finds nothing. `grep -rn "dummyjson" src` finds only `todoService.ts`'s base URL, which goes in Phase 3. `pnpm lint && pnpm test` pass. `git ls-files src | xargs wc -c | awk '$1==0'` lists nothing. The CRUD smoke check passes, delete included.
 
 ## Phase 3 — A data layer that never overwrites, with the current UI rewired to it ◆
+**Status: done** (`f610633`). The outcome is recorded in `docs/decisions.md`.
+
 **Changes**
 - Add `dexie` (4.4.x) and `dexie-react-hooks` (4.4.x). The hooks package accepts React ≥16 and Dexie ≥4.2, so React 19 is fine.
 - `src/features/tasks/store/db.ts` defines a `Dexie` subclass for a new database `tasks`. The schema includes the sync fields now, so Phase 9 doesn't need a data migration:
@@ -95,8 +97,8 @@ These come out of Codex reviews 1 and 2. Any phase that breaks one has failed, w
 - **Repository** of plain async functions over `db.tasks`. Every write runs inside a `db.transaction('rw', …)` that reads the current row first:
   - `add`;
   - `update`, which rejects if the row is tombstoned and sets `updatedAt`, `dirty = 1` and `rev + 1`;
-  - `remove`, which tombstones the row and returns a one-shot undo token `{ id, deletedAt }`; a second `remove` on the same row is a no-op that returns no token;
-  - `undoRemove(token)`, which clears `deletedAt` only if the row's `deletedAt` still equals the token's, then consumes the token;
+  - `remove`, which tombstones the row and returns a one-shot undo token `{ id, rev }`; a second `remove` on the same row is a no-op that returns no token;
+  - `undoRemove(token)`, which clears `deletedAt` only if the row is still tombstoned at the token's `rev`. **Built with `rev`, not `deletedAt` as first planned:** two deletes in the same millisecond share a timestamp, so a `deletedAt` token could undo a newer delete;
   - `clearSamples`, which tombstones `where('isSample').equals(1)`.
 - **Read hooks** `useTasks` and `useStats` wrap `useLiveQuery` and return only `ownerId === currentOwner && deletedAt === null` rows. Components call the hooks and the repository and never touch `db` directly, which keeps store logic out of components (CLAUDE.md).
 - **Seeding**: `db.on('populate', …)` bulk-adds the tasks from `src/features/tasks/data/sample-tasks.ts`. Dexie fires `populate` exactly once, when the database is first created, inside the same upgrade transaction. The samples' due dates are day offsets (−2, 0, +1, +5, null) resolved against today, so every group has an example whatever day it is.
@@ -114,7 +116,7 @@ These come out of Codex reviews 1 and 2. Any phase that breaks one has failed, w
 - **Then** delete `src/lib/indexedDB.ts`, `src/services/todoService.ts`, `src/features/todos/hooks/useTodos.ts`, TanStack Query and its devtools (decision 3), and `providers.tsx` if it's empty. No `fetch` remains anywhere.
 - **Loading vs empty**: `useLiveQuery` returns `undefined` until the first result arrives. The list treats `undefined` as loading and `[]` as empty, so the "No tasks" state never flashes on load.
 - **Server rendering**: the static export prerenders `/` in Node, where `indexedDB` doesn't exist. The `db` instance is only touched from client hooks and repository calls, never at module top level on a server path.
-- Tests import `fake-indexeddb/auto` in the Vitest setup file and delete the database in `afterEach`.
+- Tests load `fake-indexeddb/auto` from its own setup file, `vitest.idb.ts`, listed first in `setupFiles`, and delete both databases in `afterEach`. It can't share a file with anything that imports Dexie: Dexie captures `indexedDB` at import time, and the import sorter reorders side-effect imports.
 
 **Decide and log (◆): Dexie + `useLiveQuery` over a hand-written wrapper.** The owner's direction is to adopt it unless a concrete reason against turns up in this phase. What I've already checked (on 2026-11-07): React 19 peer support, a once-only `populate` hook that fits seed-once better than a hand-rolled flag, and `fake-indexeddb` compatibility for tests. None is a reason against. Two things are still to check in the phase:
 1. The First Load JS change for `/` in the build output. Dexie is far bigger than `idb`, so record before and after in the log entry.
