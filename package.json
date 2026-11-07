@@ -12,9 +12,12 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "db:start": "supabase start -x imgproxy,postgres-meta,vector,supavisor",
+    "test:db": "pnpm db:start && supabase db reset --local && vitest run --config vitest.db.config.mts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
     "dexie": "4.4.7",
     "dexie-react-hooks": "4.4.0",
     "lucide-react": "^0.544.0",

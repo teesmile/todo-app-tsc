@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      # No Supabase variables here: the build is guest-only, as on a fresh clone.
+      - run: pnpm build
+      - run: pnpm test
+      # Starts the local Supabase stack in Docker, applies the migrations and
+      # runs the row-level security tests. Uses only the local stack's keys.
+      - run: pnpm test:db
