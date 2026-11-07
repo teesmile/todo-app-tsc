@@ -283,6 +283,8 @@ The migration is additive because the bar is that nothing the user wrote is ever
 6. Open the Due chip ("Due date for …: none") and choose Tomorrow. Open the Labels chip and tick one. Each change is heard on the chip.
 
 ### Checkpoint — ship the guest app
+**Status: ready, waiting for the owner's merge.** The README top section and screenshots are done, and a pull request from `revamp` into `main` is open with its Vercel preview checked. The merge itself is left to the owner, because it replaces the live link on the resume.
+
 Merge `revamp` to `main` and deploy, so the live link on the resume shows a working app while Phases 9–11 are built. Before merging, update the README's top section with a one-line pitch, a screenshot and the live link; Phase 12 does the full README. **Verified by** the CRUD smoke check on the production URL, on a phone.
 
 **Why** (Codex review 1) The recruiter-facing result shouldn't wait for sync and offline work. A working guest app is already a complete product.
