@@ -28,6 +28,17 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Codex review 8 (Phase 8): saves that finish after newer typing
+Codex challenged: (1) a row that regroups at midnight while its title save is pending remounts; when the old save finishes, its `close()` deletes the shared draft, so typing done in the new editor is lost on the next regroup; (2) a label rename (and a label create) clears the field when its save finishes, losing text typed meanwhile.
+Verdict: AGREE on both
+Because:
+- These are the same failure as review 6's sheet and Phase 4's inline editor: a completion handler that assumes nothing changed while it waited.
+- **(1)** The shared draft store is now the truth. A save clears the draft only if the stored draft still equals what was submitted, and otherwise moves its base to the saved title. A save finishing in an unmounted instance touches nothing else, and every editor re-reads the base from the store before saving, so the remounted one doesn't report a false conflict against its own earlier save.
+- **(2)** The rename and the create clear only text that still matches what was submitted.
+
+Changed: `taskItem.tsx`, `labelManager.tsx`. Three regression tests (`review8.test.tsx`). Saves are held open with `Dexie.waitFor`, so the transaction stays alive; the midnight regroup is driven by moving the clock and firing `visibilitychange`, the browser's path. Each test fails without its fix. One helper bug was caught first (it held `put` while create uses `add`). 203 tests pass, stable over 3 runs; all browser checks pass.
+Study: "stale completion" bugs, i.e. a handler that captured state at submit time and applies it after the world moved on (search "async UI race last write wins form draft").
+
 ## 2026-11-07 — Phase 8: the accessibility pass, and what it found
 Decided by: Claude, running Phase 8 of the plan.
 Claim: check accessibility from outside: axe in jsdom on every view, axe in the real browser for contrast, and a keyboard-only run with real keys. Fix what they find. Leave the screen-reader run to a person, with a script.
