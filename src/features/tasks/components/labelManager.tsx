@@ -9,8 +9,6 @@ import { CategoryConflictError, createCategory, MAX_CATEGORY_NAME_LENGTH, remove
 import { CATEGORY_COLORS } from '../store/types'
 
 function errorText(error: unknown) {
-  if (error instanceof CategoryConflictError)
-    return `Renamed in another tab to "${error.currentName}". Press Enter to keep yours, or Escape to keep theirs.`
   return error instanceof Error ? error.message : 'That couldn\'t be saved. Try again.'
 }
 
@@ -33,7 +31,13 @@ function LabelRow({ category, uses }: { category: Category, uses: number }) {
   // Phase 7). `base` is the name the edit started from, for compare-and-set.
   const [edit, setEdit] = useState<{ draft: string, base: string } | null>(null)
   const [confirming, setConfirming] = useState(false)
+  // The other tab's name while a rename conflict is unresolved. It's its own
+  // state, cleared only by Enter (keep yours) or Escape (keep theirs): a
+  // colour change used to clear the shared save error, after which leaving
+  // the field overwrote the other tab's rename (review 9).
+  const [conflict, setConflict] = useState<string | null>(null)
   const save = useAction(updateCategory)
+  const recolor = useAction(updateCategory)
   const drop = useAction(removeCategory)
 
   async function rename() {
@@ -46,16 +50,21 @@ function LabelRow({ category, uses }: { category: Category, uses: number }) {
     const submitted = edit.draft
     try {
       const saved = await save.run(category.id, { name: submitted }, { expectName: edit.base })
+      setConflict(null)
       // Clear only if nothing was typed meanwhile; otherwise keep the newer
       // text, now based on the saved name (review of Phase 8).
       setEdit(current => (!current || current.draft === submitted ? null : { ...current, base: saved.name }))
     }
     catch (error) {
       // Shown below. After a conflict the next Enter knowingly replaces it.
-      if (error instanceof CategoryConflictError)
+      if (error instanceof CategoryConflictError) {
+        setConflict(error.currentName)
         setEdit(e => (e ? { ...e, base: error.currentName } : e))
+      }
     }
   }
+
+  const failure = [save.error, recolor.error, drop.error].find(e => e && !(e instanceof CategoryConflictError))
 
   return (
     <li className="rounded-xl bg-gray-50 p-2">
@@ -68,7 +77,7 @@ function LabelRow({ category, uses }: { category: Category, uses: number }) {
           onChange={e => setEdit({ draft: e.target.value, base: edit?.base ?? category.name })}
           onBlur={() => {
             // A conflict is decided by Enter or Escape, not by leaving the field.
-            if (!(save.error instanceof CategoryConflictError))
+            if (conflict === null)
               rename()
           }}
           onKeyDown={(e) => {
@@ -81,13 +90,14 @@ function LabelRow({ category, uses }: { category: Category, uses: number }) {
               e.preventDefault()
               e.stopPropagation()
               setEdit(null)
+              setConflict(null)
               save.reset()
             }
           }}
           aria-label={`Name of label "${category.name}"`}
           className="min-h-11 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2 text-sm md:min-h-9"
         />
-        <ColourSelect value={category.color} onChange={color => save.fire(category.id, { color })} label={`Colour of label "${category.name}"`} />
+        <ColourSelect value={category.color} onChange={color => recolor.fire(category.id, { color })} label={`Colour of label "${category.name}"`} />
         {!confirming && (
           <button
             type="button"
@@ -111,7 +121,13 @@ function LabelRow({ category, uses }: { category: Category, uses: number }) {
           </button>
         </div>
       )}
-      {Boolean(save.error ?? drop.error) && <p role="alert" className="mt-1 text-sm text-red-600">{errorText(save.error ?? drop.error)}</p>}
+      {(conflict !== null || failure !== undefined) && (
+        <p role="alert" className="mt-1 text-sm text-red-600">
+          {conflict !== null
+            ? `Renamed in another tab to "${conflict}". Press Enter to keep yours, or Escape to keep theirs.`
+            : errorText(failure)}
+        </p>
+      )}
     </li>
   )
 }

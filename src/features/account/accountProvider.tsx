@@ -70,14 +70,22 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
           window.history.replaceState(window.history.state, '', clean)
         if (cancelled)
           return
-        if (user)
+        const callback = isAuthCallback(search)
+        if (user) {
           setState({ status: 'signed-in', user })
-        else
-          setState(error && !failed ? { status: 'unavailable', message: UNREACHABLE } : { status: 'guest' })
-        if (failed)
-          setNotice(`Sign-in didn't finish: ${failed}`)
-        else if (user && isAuthCallback(search))
-          setNotice(`Signed in as ${user.fullName ?? user.email ?? 'you'}`)
+          if (callback)
+            setNotice(`Signed in as ${user.fullName ?? user.email ?? 'you'}`)
+        }
+        else if (callback) {
+          // Back from Google without a session: an error in the URL, or a
+          // code that couldn't be exchanged (expired, reused, or from another
+          // browser). Say so, rather than quietly showing a guest.
+          setState({ status: 'guest' })
+          setNotice(`Sign-in didn't finish: ${failed ?? error ?? 'Google didn\'t confirm it'}. Try signing in again.`)
+        }
+        else {
+          setState(error ? { status: 'unavailable', message: UNREACHABLE } : { status: 'guest' })
+        }
       }
       catch {
         if (!cancelled)
@@ -124,11 +132,11 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     return null
   }, [])
 
-  const deleteAccount = useCallback(async () => {
+  const deleteAccount = useCallback(async (expectedUserId: string) => {
     const loaded = client.current
     if (!loaded)
       return UNREACHABLE
-    const error = await loaded.deleteAccount()
+    const error = await loaded.deleteAccount(expectedUserId)
     if (error)
       return `Your account wasn't deleted: ${error}`
     // The user no longer exists, so this only clears the local session.

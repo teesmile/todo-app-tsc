@@ -11,8 +11,6 @@ const METHOD_LABELS: Record<SignInMethod, string> = {
   google: 'Continue with Google',
 }
 
-type View = 'main' | 'confirm-delete'
-
 /**
  * The header's account control: "Sign in" for a guest, the account's name
  * when signed in, "Accounts unavailable" when Supabase can't be reached.
@@ -59,7 +57,12 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
   const { state } = account
   const headingId = useId()
   const dialogRef = useRef<HTMLDialogElement>(null)
-  const [view, setView] = useState<View>('main')
+  // The account the delete confirmation was opened for. The confirmation
+  // shows only while that same account is signed in: if another tab signs in
+  // as someone else, it disappears instead of pointing at them (review 9).
+  const [confirmFor, setConfirmFor] = useState<string | null>(null)
+  const confirmedUser = state.status === 'signed-in' && confirmFor === state.user.id ? state.user : null
+  const confirming = confirmedUser !== null
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const wasOpen = useRef(false)
@@ -78,7 +81,7 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
   }, [open, returnFocus])
 
   function close() {
-    setView('main')
+    setConfirmFor(null)
     setError(null)
     onClose()
   }
@@ -94,7 +97,7 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
       close()
   }
 
-  const heading = view === 'confirm-delete'
+  const heading = confirming
     ? 'Delete your account?'
     : state.status === 'signed-in'
       ? 'Your account'
@@ -122,7 +125,7 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
             </button>
           </div>
 
-          {state.status === 'signed-in' && view === 'main' && (
+          {state.status === 'signed-in' && !confirming && (
             <div className="space-y-4 text-sm text-gray-700">
               <p>
                 Signed in as
@@ -137,24 +140,27 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
                 <button type="button" disabled={busy} onClick={() => run(account.signOut)} className="min-h-11 rounded-lg bg-gray-900 px-4 font-medium text-white hover:bg-gray-700 disabled:opacity-60">
                   Sign out
                 </button>
-                <button type="button" disabled={busy} onClick={() => setView('confirm-delete')} className="min-h-11 rounded-lg px-4 font-medium text-red-700 ring-1 ring-red-300 hover:bg-red-50 disabled:opacity-60">
+                <button type="button" disabled={busy} onClick={() => setConfirmFor(state.user.id)} className="min-h-11 rounded-lg px-4 font-medium text-red-700 ring-1 ring-red-300 hover:bg-red-50 disabled:opacity-60">
                   Delete account…
                 </button>
               </div>
             </div>
           )}
 
-          {state.status === 'signed-in' && view === 'confirm-delete' && (
+          {confirmedUser && (
             <div className="space-y-4 text-sm text-gray-700">
               <p>
-                This permanently deletes your account and everything stored with it on our server. It can&apos;t be undone.
-                Tasks on this device stay here.
+                This permanently deletes the account
+                {' '}
+                <strong className="font-semibold text-gray-900">{confirmedUser.email ?? confirmedUser.fullName}</strong>
+                {' '}
+                and everything stored with it on our server. It can&apos;t be undone. Tasks on this device stay here.
               </p>
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={busy} onClick={() => run(account.deleteAccount)} className="min-h-11 rounded-lg bg-red-700 px-4 font-medium text-white hover:bg-red-800 disabled:opacity-60">
+                <button type="button" disabled={busy} onClick={() => run(() => account.deleteAccount(confirmedUser.id))} className="min-h-11 rounded-lg bg-red-700 px-4 font-medium text-white hover:bg-red-800 disabled:opacity-60">
                   {busy ? 'Deleting…' : 'Delete my account'}
                 </button>
-                <button type="button" disabled={busy} onClick={() => setView('main')} className="min-h-11 rounded-lg px-4 font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50">
+                <button type="button" disabled={busy} onClick={() => setConfirmFor(null)} className="min-h-11 rounded-lg px-4 font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50">
                   Cancel
                 </button>
               </div>

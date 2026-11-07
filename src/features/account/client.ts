@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AccountUser } from './session'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config'
 import { accountUserFrom } from './session'
@@ -17,11 +18,52 @@ export interface AccountClient {
   signInWithGoogle: (redirectTo: string) => Promise<string | null>
   /** Ends this device's session only; other devices stay signed in. */
   signOut: () => Promise<string | null>
-  /** Deletes the account and, by cascade, everything stored with it. */
-  deleteAccount: () => Promise<string | null>
+  /**
+   * Deletes the account and, by cascade, everything stored with it. The
+   * server refuses unless `expectedUserId` is still the signed-in user.
+   */
+  deleteAccount: (expectedUserId: string) => Promise<string | null>
 }
 
 let loading: Promise<AccountClient> | null = null
+
+/**
+ * Wraps a Supabase client in the AccountClient methods. Exported so a test
+ * can run it against the real SDK with a mocked network.
+ */
+export function accountClientFrom(supabase: SupabaseClient): AccountClient {
+  return {
+    async currentUser() {
+      // initialize() finishes a Google redirect's code exchange. Its error is
+      // the only report of a failed exchange (an expired or reused code):
+      // getSession() then just says "no session" (review 9).
+      const { error: initError } = await supabase.auth.initialize()
+      const { data, error } = await supabase.auth.getSession()
+      return { user: data.session ? accountUserFrom(data.session.user) : null, error: (initError ?? error)?.message ?? null }
+    },
+    onChange(callback) {
+      // Only state updates in here: calling other auth methods inside
+      // this callback can deadlock the SDK's session lock.
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session ? accountUserFrom(session.user) : null))
+      return () => data.subscription.unsubscribe()
+    },
+    async signInWithGoogle(redirectTo) {
+      const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
+      return error?.message ?? null
+    },
+    async signOut() {
+      const { error } = await supabase.auth.signOut({ scope: 'local' })
+      return error?.message ?? null
+    },
+    async deleteAccount(expectedUserId) {
+      const { error } = await supabase.rpc('delete_my_account', { expected_user_id: expectedUserId })
+      return error?.message ?? null
+    },
+  }
+}
+
+/** The auth options: PKCE, a saved session, and the redirect read from the URL. */
+export const AUTH_OPTIONS = { flowType: 'pkce', persistSession: true, detectSessionInUrl: true, autoRefreshToken: true } as const
 
 /**
  * Loads the Supabase SDK on first use, as its own chunk: a guest who never
@@ -31,36 +73,7 @@ let loading: Promise<AccountClient> | null = null
  */
 export function loadAccountClient(): Promise<AccountClient> {
   loading ??= import('@supabase/supabase-js')
-    .then(({ createClient }) => {
-      const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-        auth: { flowType: 'pkce', persistSession: true, detectSessionInUrl: true, autoRefreshToken: true },
-      })
-      const client: AccountClient = {
-        async currentUser() {
-          const { data, error } = await supabase.auth.getSession()
-          return { user: data.session ? accountUserFrom(data.session.user) : null, error: error?.message ?? null }
-        },
-        onChange(callback) {
-          // Only state updates in here: calling other auth methods inside
-          // this callback can deadlock the SDK's session lock.
-          const { data } = supabase.auth.onAuthStateChange((_event, session) => callback(session ? accountUserFrom(session.user) : null))
-          return () => data.subscription.unsubscribe()
-        },
-        async signInWithGoogle(redirectTo) {
-          const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
-          return error?.message ?? null
-        },
-        async signOut() {
-          const { error } = await supabase.auth.signOut({ scope: 'local' })
-          return error?.message ?? null
-        },
-        async deleteAccount() {
-          const { error } = await supabase.rpc('delete_my_account')
-          return error?.message ?? null
-        },
-      }
-      return client
-    })
+    .then(({ createClient }) => accountClientFrom(createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { auth: AUTH_OPTIONS })))
     .catch((error: unknown) => {
       // A failed chunk load (offline) mustn't stick: the next try loads again.
       loading = null

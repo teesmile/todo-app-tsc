@@ -143,8 +143,10 @@ grant execute on function public.ping() to anon, authenticated;
 -- Self-service account deletion, the "Delete account" button. Removing the
 -- auth user cascades to every task and label it owns. Security definer
 -- because only the database owner may delete from auth.users; it can only
--- ever delete the caller.
-create function public.delete_my_account() returns void
+-- ever delete the caller. The caller also names the account they confirmed:
+-- if another tab has since signed in as someone else, the ids differ and
+-- nothing is deleted (review 9).
+create function public.delete_my_account(expected_user_id uuid) returns void
 language plpgsql
 security definer
 set search_path = ''
@@ -153,9 +155,12 @@ begin
   if auth.uid() is null then
     raise exception 'Not signed in' using errcode = '42501';
   end if;
+  if expected_user_id is distinct from auth.uid() then
+    raise exception 'This is no longer the account you confirmed' using errcode = '42501';
+  end if;
   delete from auth.users where id = auth.uid();
 end;
 $$;
 
-revoke execute on function public.delete_my_account() from public, anon, authenticated;
-grant execute on function public.delete_my_account() to authenticated;
+revoke execute on function public.delete_my_account(uuid) from public, anon, authenticated;
+grant execute on function public.delete_my_account(uuid) to authenticated;

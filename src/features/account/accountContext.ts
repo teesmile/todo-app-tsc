@@ -21,7 +21,8 @@ export interface Account {
   /** Starts a sign-in. Resolves with an error message if it couldn't start (success navigates away). */
   signIn: (method: SignInMethod) => Promise<string | null>
   signOut: () => Promise<string | null>
-  deleteAccount: () => Promise<string | null>
+  /** Deletes the account the user confirmed; refused if it's no longer the signed-in one. */
+  deleteAccount: (expectedUserId: string) => Promise<string | null>
   /** Tries to restore the session again after 'unavailable'. */
   retry: () => void
 }

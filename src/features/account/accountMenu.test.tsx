@@ -137,7 +137,7 @@ describe('account menu', () => {
 
     await user.click(screen.getByRole('button', { name: 'Delete my account' }))
     expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
-    expect(client.deleteAccount).toHaveBeenCalledOnce()
+    expect(client.deleteAccount).toHaveBeenCalledExactlyOnceWith('u1')
     expect(screen.getByRole('status')).toHaveTextContent('Your account and everything stored with it were deleted')
   })
 

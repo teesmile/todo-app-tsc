@@ -126,8 +126,8 @@ describe('functions', () => {
     expect((await a.db.from('categories').insert(label)).error).toBeNull()
     expect((await b.db.from('tasks').insert({ id: randomUUID(), title: 'B\'s task' })).error).toBeNull()
 
-    expect((await anonClient().rpc('delete_my_account')).error).not.toBeNull()
-    expect((await a.db.rpc('delete_my_account')).error).toBeNull()
+    expect((await anonClient().rpc('delete_my_account', { expected_user_id: a.id })).error).not.toBeNull()
+    expect((await a.db.rpc('delete_my_account', { expected_user_id: a.id })).error).toBeNull()
 
     const admin = adminClient()
     expect((await admin.auth.admin.getUserById(a.id)).data.user).toBeNull()
@@ -136,5 +136,14 @@ describe('functions', () => {
     expect((await a.db.from('tasks').select('id')).data).toEqual([])
     expect((await a.db.from('categories').select('id')).data).toEqual([])
     expect((await b.db.from('tasks').select('title')).data).toEqual([{ title: 'B\'s task' }])
+  })
+  it('delete_my_account refuses when the confirmed account isn\'t the signed-in one (review 9)', async () => {
+    const a = await createUser('a')
+    const b = await createUser('b')
+    const refused = await a.db.rpc('delete_my_account', { expected_user_id: b.id })
+    expect(refused.error?.code).toBe('42501')
+    const admin = adminClient()
+    expect((await admin.auth.admin.getUserById(a.id)).data.user).not.toBeNull()
+    expect((await admin.auth.admin.getUserById(b.id)).data.user).not.toBeNull()
   })
 })
