@@ -3,7 +3,7 @@ import { validate as isUuid, version as uuidVersion } from 'uuid'
 import { describe, expect, it, vi } from 'vitest'
 import { getDb, getInstallId, TasksDB } from './db'
 import { LEGACY_DB_NAME, legacyTaskId, runLegacyImport } from './legacyImport'
-import { listTasks, MAX_TITLE_LENGTH, purgeGuestTombstones, remove, TitleError, UNDO_WINDOW_MS, update } from './repository'
+import { listTasks, MAX_TITLE_LENGTH, purgeGuestTombstones, remove, TitleError, TOMBSTONE_RETENTION_MS, update } from './repository'
 
 const DAY = 24 * 60 * 60 * 1000
 const t0 = new Date('2026-10-01T09:00:00Z')
@@ -115,7 +115,7 @@ describe('legacy import', () => {
     const [mine] = (await listTasks()).filter(t => t.title === 'Mine, created locally')
     await remove(mine.id)
     // The undo window passes and the next page load purges the tombstone.
-    await purgeGuestTombstones({ now: Date.now() + UNDO_WINDOW_MS + 1 })
+    await purgeGuestTombstones({ now: Date.now() + TOMBSTONE_RETENTION_MS + 1 })
     expect(await getDb().tasks.get(mine.id)).toBeUndefined()
     // The first run's "done" marker in the old database never landed.
     await forgetImportedAt()

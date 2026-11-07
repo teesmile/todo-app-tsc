@@ -6,8 +6,9 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { useAction } from '../hooks/useAction'
 import { formatAdded } from '../lib/dates'
 import { saveErrorMessage } from '../lib/errors'
-import { MAX_TITLE_LENGTH, update } from '../store/repository'
+import { MAX_TITLE_LENGTH, TitleConflictError, update } from '../store/repository'
 import { DueChooser } from './dueChooser'
+import { useEditDrafts } from './editDrafts'
 
 interface TaskItemProps {
   task: Task
@@ -32,10 +33,21 @@ interface TaskItemProps {
 export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps) {
   const titleId = useId()
   const errorId = useId()
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(task.title)
+  const drafts = useEditDrafts()
+  // A row moved to another group remounts; pick up its open editor, if any.
+  const [restored] = useState(() => drafts.get(task.id))
+  const [editing, setEditing] = useState(Boolean(restored))
+  const [draft, setDraft] = useState(restored?.draft ?? task.title)
   // The latest typed text, readable after an await without a stale closure.
-  const draftRef = useRef(task.title)
+  const draftRef = useRef(draft)
+  // The title when editing began. A draft equal to it is untouched and never
+  // written, and saves compare-and-set against it, so another tab's newer
+  // title is never silently overwritten (Codex review of Phases 4-6).
+  const baseRef = useRef(restored?.base ?? task.title)
+  // After a conflict, only Enter (keep mine) or Escape (keep theirs) decides.
+  const conflicted = useRef(restored?.conflicted ?? false)
+  const focusedRef = useRef(restored?.focused ?? false)
+  const focusOnOpen = useRef(restored?.focused ?? false)
   const saveTitle = useAction(update)
   const toggle = useAction(update)
   const setDue = useAction(update)
@@ -45,15 +57,20 @@ export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps)
   // Escape must stop the blur that follows it from saving, and Enter must
   // stop that blur from saving a second time.
   const settled = useRef(false)
-  const wasEditing = useRef(false)
+  const wasEditing = useRef(editing)
 
   useEffect(() => {
-    if (editing)
+    if (editing && focusOnOpen.current)
       inputRef.current?.focus()
-    else if (wasEditing.current)
+    else if (!editing && wasEditing.current)
       editButtonRef.current?.focus()
+    focusOnOpen.current = false
     wasEditing.current = editing
   }, [editing])
+
+  function persist() {
+    drafts.set(task.id, { draft: draftRef.current, base: baseRef.current, conflicted: conflicted.current, focused: focusedRef.current })
+  }
 
   function changeDraft(value: string) {
     draftRef.current = value
@@ -62,44 +79,64 @@ export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps)
 
   function startEditing() {
     settled.current = false
+    baseRef.current = task.title
+    conflicted.current = false
+    focusedRef.current = true
+    focusOnOpen.current = true
     changeDraft(task.title)
+    persist()
     setEditing(true)
+  }
+
+  function close() {
+    settled.current = true
+    conflicted.current = false
+    drafts.delete(task.id)
+    setEditing(false)
   }
 
   async function commit() {
     if (settled.current)
       return
-    if (draftRef.current.trim() === task.title) {
-      settled.current = true
-      setEditing(false)
+    const submitted = draftRef.current
+    if (submitted.trim() === baseRef.current) {
+      // Untouched, or put back as it was: nothing to write.
+      close()
       return
     }
     settled.current = true
-    const submitted = draftRef.current
     try {
-      const saved = await saveTitle.run(task.id, { title: submitted })
+      const saved = await saveTitle.run(task.id, { title: submitted }, { expectTitle: baseRef.current })
       onSaved?.(saved)
+      baseRef.current = saved.title
+      conflicted.current = false
       if (draftRef.current !== submitted) {
         // More was typed while that save was in flight (found in place of
         // Phase 4's Codex review). Keep it: stay open, or save it straight
         // away if focus has already left the field.
         settled.current = false
+        persist()
         if (document.activeElement !== inputRef.current)
           commit()
         return
       }
-      setEditing(false)
+      close()
     }
-    catch {
+    catch (error) {
       // Shown below; stay in the field with the draft so nothing is lost.
       settled.current = false
+      if (error instanceof TitleConflictError) {
+        // The next Enter knowingly replaces this newer title.
+        baseRef.current = error.currentTitle
+        conflicted.current = true
+      }
+      persist()
     }
   }
 
   function cancel() {
-    settled.current = true
     changeDraft(task.title)
-    setEditing(false)
+    close()
   }
 
   const error = saveTitle.error ?? toggle.error ?? setDue.error
@@ -127,7 +164,14 @@ export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps)
                 ref={inputRef}
                 type="text"
                 value={draft}
-                onChange={e => changeDraft(e.target.value)}
+                onChange={(e) => {
+                  changeDraft(e.target.value)
+                  persist()
+                }}
+                onFocus={() => {
+                  focusedRef.current = true
+                  persist()
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault()
@@ -138,7 +182,13 @@ export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps)
                     cancel()
                   }
                 }}
-                onBlur={() => commit()}
+                onBlur={() => {
+                  focusedRef.current = false
+                  persist()
+                  // After a conflict, leaving the field doesn't choose.
+                  if (!conflicted.current)
+                    commit()
+                }}
                 maxLength={Math.max(MAX_TITLE_LENGTH, task.title.length)}
                 aria-label={`Edit "${task.title}"`}
                 aria-invalid={Boolean(saveTitle.error)}

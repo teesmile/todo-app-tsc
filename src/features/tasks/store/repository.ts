@@ -25,6 +25,17 @@ export class TaskNotFoundError extends Error {
   }
 }
 
+/**
+ * The title changed since an edit began, typically in another tab. Carries
+ * the stored title so the editor can say what it is and let the user choose.
+ */
+export class TitleConflictError extends Error {
+  constructor(readonly currentTitle: string) {
+    super(`The title changed to "${currentTitle}" since editing began`)
+    this.name = 'TitleConflictError'
+  }
+}
+
 export class TitleError extends Error {
   constructor(message: string) {
     super(message)
@@ -80,11 +91,15 @@ export interface TaskPatch {
  * Changing a sample's title or due date makes it yours (decision 5); just
  * completing it doesn't.
  */
-export async function update(id: string, patch: TaskPatch, { db = getDb() }: { db?: TasksDB } = {}): Promise<Task> {
+export async function update(id: string, patch: TaskPatch, { db = getDb(), expectTitle }: { db?: TasksDB, expectTitle?: string } = {}): Promise<Task> {
   return db.transaction('rw', db.tasks, async () => {
     const current = await db.tasks.get(id)
     if (!current || current.deletedAt !== null)
       throw new TaskNotFoundError(id)
+    // Compare-and-set: an edit made against an older title must not
+    // silently overwrite a newer one (Codex review of Phases 4-6).
+    if (expectTitle !== undefined && current.title !== expectTitle)
+      throw new TitleConflictError(current.title)
 
     const now = Date.now()
     const next: Task = { ...current, updatedAt: now, dirty: 1, rev: current.rev + 1 }
@@ -167,7 +182,15 @@ export async function clearSamples({ db = getDb(), ownerId = GUEST }: { db?: Tas
 export const UNDO_WINDOW_MS = 6000
 
 /**
- * Hard-deletes guest tombstones whose undo window has passed. A guest's
+ * How long a guest tombstone is kept before the boot-time purge removes it.
+ * Much longer than the undo window: the toast pauses on hover or focus, and
+ * another tab's boot must not delete a row that a paused Undo still points
+ * at (Codex review of Phases 4-6). Guest tombstones cost almost nothing.
+ */
+export const TOMBSTONE_RETENTION_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Hard-deletes guest tombstones older than TOMBSTONE_RETENTION_MS. A guest's
  * tombstone is only kept for undo, because nothing will ever sync it. A
  * signed-in user's tombstones are left alone: sync needs them so a delete
  * doesn't come back from another device (Phase 9). Returns how many went.
@@ -177,7 +200,7 @@ export async function purgeGuestTombstones({ db = getDb(), now = Date.now() }: {
     const expired = await db.tasks
       .where('ownerId')
       .equals(GUEST)
-      .filter(task => task.deletedAt !== null && task.deletedAt < now - UNDO_WINDOW_MS)
+      .filter(task => task.deletedAt !== null && task.deletedAt < now - TOMBSTONE_RETENTION_MS)
       .primaryKeys()
     await db.tasks.bulkDelete(expired)
     return expired.length

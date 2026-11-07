@@ -28,6 +28,18 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Codex review 6 (Phases 4–6, the first since the usage limit)
+Codex challenged: (1) an untouched inline editor overwrites another tab's edit on blur; (2) the bottom sheet closes after an add and discards text typed while it saved; (3) a task moving group (midnight, another tab) unmounts its editor and loses the draft; (4) another tab's boot-time purge deletes a tombstone that a paused Undo still points at, so Undo silently does nothing.
+Verdict: AGREE on all four; DISAGREE only with cross-tab undo-token coordination as the fix for 4
+Because:
+- **(1)** Comparing with the live title made another tab's change look like the user's. The editor now keeps the title it started from: untouched never writes, and a real edit is compare-and-set (`expectTitle`). A conflict says "Changed in another tab to "B". Press Enter to keep yours, or Escape to keep theirs", and blur doesn't decide.
+- **(2)** The form reports whether newer text remains, and the sheet stays open for it.
+- **(3)** Open drafts live in the list, keyed by task id, so a remounted row reopens with its draft and focus.
+- **(4)** A token registry across tabs needs a BroadcastChannel and locks to protect rows that cost nothing to keep, so guest tombstones are now kept 24 hours, and Undo says when the task is already gone.
+
+Changed: `repository.ts` (`TitleConflictError`, `TOMBSTONE_RETENTION_MS`), `taskItem.tsx`, `editDrafts.ts`, `addTaskForm.tsx`, `addTaskSheet.tsx`, `taskList.tsx`. Seven regression tests (`review6.test.tsx`), each confirmed failing first; two were racy and fixed before trusting them. 163 tests pass, stable over 3 runs; all browser checks pass. The outstanding review of Phases 4 and 5 is closed by this one.
+Study: optimistic concurrency, i.e. compare-and-set on a version you read, and why an untouched form must never write (search "lost update problem form edits").
+
 ## 2026-11-07 — Phase 6: the layout comes first, as one phone-first phase
 Decided by: Anthony. The app was unusable on a phone: at 390px the desktop dashboard squeezed into two columns, the "New task" and "Due date" labels overlapped, and the stats rings collided.
 Claim: rebuild the page phone-first (one column, two from 768px); replace the dashboard grid with a four-count summary; show when each task was added; make the due date a small optional chip; add on phones through a bottom sheet; greet by name and date.

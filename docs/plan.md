@@ -165,7 +165,7 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
   - A toast with an Undo button shows for 6s, announced through an `aria-live="polite"` region; Undo calls `undoRemove(token)`.
   - Focus moves to the next row, or to the group heading if the row was last.
   - A tombstone stays local until the toast has closed, so a synced delete never needs to be undone (Phase 9).
-  - Guest tombstones older than the undo window are purged on boot, because nothing will ever sync them.
+  - Guest tombstones older than 24 hours are purged on boot, because nothing will ever sync them. (First built as "older than the undo window"; Codex review 6 showed another tab's boot could then delete a row a paused Undo still pointed at.)
 - **Add**: a single-line form at the top of the list (title plus optional date). It becomes a bottom sheet on phones in Phase 6.
 - **Clear sample tasks** (from the v1 brief, which no phase had owned): a button under the list while any samples remain. It clears them with one Undo for all of them; `clearSamples()` returns a token per task.
 - **Today follows the clock**: `useToday()` re-groups at local midnight and when the tab becomes visible again, so a list left open overnight moves Tomorrow into Today.

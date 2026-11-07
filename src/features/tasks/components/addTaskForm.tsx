@@ -2,7 +2,7 @@
 
 import type { Ref } from 'react'
 import type { Task } from '../store/types'
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useAction } from '../hooks/useAction'
 import { saveErrorMessage } from '../lib/errors'
 import { add, MAX_TITLE_LENGTH } from '../store/repository'
@@ -15,7 +15,8 @@ interface AddTaskFormProps {
   defaultDue?: string | null
   /** In the bottom sheet: Escape closes the sheet instead of just leaving the field. */
   autoFocus?: boolean
-  onAdded?: (task: Task) => void
+  /** `draftLeft` is true when more was typed while the add was in flight. */
+  onAdded?: (task: Task, info: { draftLeft: boolean }) => void
 }
 
 /**
@@ -29,6 +30,8 @@ interface AddTaskFormProps {
 export function AddTaskForm({ titleRef, today, defaultDue = null, autoFocus = false, onAdded }: AddTaskFormProps) {
   const id = useId()
   const [title, setTitle] = useState('')
+  // The latest typed title, readable after the add's await.
+  const titleNow = useRef('')
   // undefined: not chosen, so the default applies; null: chosen "No due date".
   const [chosenDue, setChosenDue] = useState<string | null | undefined>(undefined)
   const dueDate = chosenDue === undefined ? defaultDue : chosenDue
@@ -41,9 +44,12 @@ export function AddTaskForm({ titleRef, today, defaultDue = null, autoFocus = fa
       const task = await addTask.run({ title, dueDate })
       // Clear only what was submitted: text typed while the add was in
       // flight is the next task, not something to throw away.
+      const draftLeft = titleNow.current !== submitted.title
+      if (!draftLeft)
+        titleNow.current = ''
       setTitle(current => (current === submitted.title ? '' : current))
       setChosenDue(current => (current === submitted.chosenDue ? undefined : current))
-      onAdded?.(task)
+      onAdded?.(task, { draftLeft })
     }
     catch {
       // Shown below; the draft stays.
@@ -59,7 +65,10 @@ export function AddTaskForm({ titleRef, today, defaultDue = null, autoFocus = fa
           id={`${id}-title`}
           type="text"
           value={title}
-          onChange={e => setTitle(e.target.value)}
+          onChange={(e) => {
+            titleNow.current = e.target.value
+            setTitle(e.target.value)
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Escape' && !autoFocus) {
               e.preventDefault()
