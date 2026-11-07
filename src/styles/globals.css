@@ -121,3 +121,32 @@
 }
 
 
+
+/* The bottom sheet slides up, unless reduced motion is preferred. */
+@media (prefers-reduced-motion: no-preference) {
+  dialog.sheet[open] {
+    animation: sheet-up 200ms ease-out;
+  }
+  dialog.sheet[open]::backdrop {
+    animation: sheet-fade 200ms ease-out;
+  }
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A focus ring for anything that doesn't draw its own (Phase 8). Elements
+   with their own focus-visible ring set outline: none, so they keep theirs. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-orange-500);
+    outline-offset: 2px;
+  }
+}
