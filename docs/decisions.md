@@ -28,6 +28,17 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Codex review 7 (Phase 7): label writes that break Undo or drop changes
+Codex challenged: (1) deleting a label bumps the `rev` of a tombstoned task, so that task's pending Undo token no longer matches and Undo fails; (2) ticking a label sends the whole rendered list, so two tabs (or two quick clicks) adding different labels drop one; (3) an untouched label-name field writes the old name back over another tab's rename.
+Verdict: AGREE on all three
+Because:
+- **(1)** A delete now records its own generation in `deletedRev`, and the token matches that. Later writes to a tombstone, whether label cleanup now or sync bookkeeping later, can't invalidate it. I preferred this to skipping tombstones in label cleanup, because it protects against every future writer, not just this one.
+- **(2)** Ticks are single membership changes (`setTaskLabel(task, label, on)`) applied to the stored list inside one transaction.
+- **(3)** This is the same lost update as the task editor in review 6, so it gets the same cure. An untouched field mirrors the stored name and never writes; a real edit is compare-and-set (`expectName`), and a conflict reads "Renamed in another tab to …", with Enter keeping yours and Escape keeping theirs.
+
+Changed: `types.ts` (`deletedRev`), `repository.ts` (`setTaskLabel`, `CategoryConflictError`, `expectName`), `labelChooser.tsx`, `taskItem.tsx`, `labelManager.tsx`, `useAction` (`reset`). Six regression tests (`review7.test.tsx`), all failing first. 190 tests pass, stable over 3 runs; the browser checks pass.
+Study: why "send the whole list" is a lost-update hazard, and why set membership ops commute (search "commutative operations CRDT add-wins set").
+
 ## 2026-11-07 — Phase 7: Vital and labels, schema version 2, and the phases renumbered
 Decided by: Anthony. Bring back the old dashboard's dead "Vital Task" and "Task Categories" links as real features, as a phase of their own after the layout.
 Claim: a Vital flag (a filter, and first within its date group) and user-made labels (name plus one of eight colours, many per task, a label filter). Dexie schema version 2. The accounts and sync phases now cover both.

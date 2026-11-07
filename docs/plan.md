@@ -97,7 +97,7 @@ These come out of Codex reviews 1 and 2. Any phase that breaks one has failed, w
 - **Repository** of plain async functions over `db.tasks`. Every write runs inside a `db.transaction('rw', …)` that reads the current row first:
   - `add`;
   - `update`, which rejects if the row is tombstoned and sets `updatedAt`, `dirty = 1` and `rev + 1`;
-  - `remove`, which tombstones the row and returns a one-shot undo token `{ id, rev }`; a second `remove` on the same row is a no-op that returns no token;
+  - `remove`, which tombstones the row and returns a one-shot undo token `{ id, rev }`; a second `remove` on the same row is a no-op that returns no token. (Since Codex review 7 the token matches a dedicated `deletedRev` set only by the delete, so later writes to the tombstone can't invalidate it.)
   - `undoRemove(token)`, which clears `deletedAt` only if the row is still tombstoned at the token's `rev`. **Built with `rev`, not `deletedAt` as first planned:** two deletes in the same millisecond share a timestamp, so a `deletedAt` token could undo a newer delete;
   - `clearSamples`, which tombstones `where('isSample').equals(1)`.
 - **Read hooks** `useTasks` and `useStats` wrap `useLiveQuery` and return only `ownerId === currentOwner && deletedAt === null` rows. Components call the hooks and the repository and never touch `db` directly, which keeps store logic out of components (CLAUDE.md).

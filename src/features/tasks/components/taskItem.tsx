@@ -6,7 +6,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { useAction } from '../hooks/useAction'
 import { formatAdded } from '../lib/dates'
 import { saveErrorMessage } from '../lib/errors'
-import { MAX_TITLE_LENGTH, TitleConflictError, update } from '../store/repository'
+import { MAX_TITLE_LENGTH, setTaskLabel, TitleConflictError, update } from '../store/repository'
 import { DueChooser } from './dueChooser'
 import { useEditDrafts } from './editDrafts'
 import { LabelChips, LabelChooser } from './labelChooser'
@@ -53,7 +53,7 @@ export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps)
   const toggle = useAction(update)
   const setDue = useAction(update)
   const setVital = useAction(update)
-  const setLabels = useAction(update)
+  const setLabels = useAction(setTaskLabel)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const editButtonRef = useRef<HTMLButtonElement>(null)
@@ -238,7 +238,7 @@ export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps)
           <LabelChips ids={task.categoryIds} />
           <LabelChooser
             value={task.categoryIds}
-            onChange={categoryIds => setLabels.fire(task.id, { categoryIds })}
+            onToggle={(labelId, on) => setLabels.fire(task.id, labelId, on)}
             subject={`"${task.title}"`}
           />
         </div>

@@ -5,10 +5,12 @@ import { X } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useAction } from '../hooks/useAction'
 import { PALETTE } from '../lib/palette'
-import { createCategory, MAX_CATEGORY_NAME_LENGTH, removeCategory, updateCategory } from '../store/repository'
+import { CategoryConflictError, createCategory, MAX_CATEGORY_NAME_LENGTH, removeCategory, updateCategory } from '../store/repository'
 import { CATEGORY_COLORS } from '../store/types'
 
 function errorText(error: unknown) {
+  if (error instanceof CategoryConflictError)
+    return `Renamed in another tab to "${error.currentName}". Press Enter to keep yours, or Escape to keep theirs.`
   return error instanceof Error ? error.message : 'That couldn\'t be saved. Try again.'
 }
 
@@ -26,14 +28,30 @@ function ColourSelect({ value, onChange, label }: { value: CategoryColor, onChan
 }
 
 function LabelRow({ category, uses }: { category: Category, uses: number }) {
-  const [name, setName] = useState(category.name)
+  // While untouched, the field mirrors the stored name, so a rename in
+  // another tab shows up and leaving the field writes nothing (Codex review of
+  // Phase 7). `base` is the name the edit started from, for compare-and-set.
+  const [edit, setEdit] = useState<{ draft: string, base: string } | null>(null)
   const [confirming, setConfirming] = useState(false)
   const save = useAction(updateCategory)
   const drop = useAction(removeCategory)
 
-  function rename() {
-    if (name.trim() && name.trim() !== category.name)
-      save.fire(category.id, { name })
+  async function rename() {
+    if (!edit)
+      return
+    if (edit.draft.trim() === edit.base) {
+      setEdit(null)
+      return
+    }
+    try {
+      await save.run(category.id, { name: edit.draft }, { expectName: edit.base })
+      setEdit(null)
+    }
+    catch (error) {
+      // Shown below. After a conflict the next Enter knowingly replaces it.
+      if (error instanceof CategoryConflictError)
+        setEdit(e => (e ? { ...e, base: error.currentName } : e))
+    }
   }
 
   return (
@@ -42,14 +60,25 @@ function LabelRow({ category, uses }: { category: Category, uses: number }) {
         <span className={`h-3 w-3 shrink-0 rounded-full ${PALETTE[category.color].dot}`} aria-hidden="true" />
         <input
           type="text"
-          value={name}
+          value={edit ? edit.draft : category.name}
           maxLength={MAX_CATEGORY_NAME_LENGTH}
-          onChange={e => setName(e.target.value)}
-          onBlur={rename}
+          onChange={e => setEdit({ draft: e.target.value, base: edit?.base ?? category.name })}
+          onBlur={() => {
+            // A conflict is decided by Enter or Escape, not by leaving the field.
+            if (!(save.error instanceof CategoryConflictError))
+              rename()
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
               rename()
+            }
+            else if (e.key === 'Escape' && edit) {
+              // Keep the stored name; don't close the dialog as well.
+              e.preventDefault()
+              e.stopPropagation()
+              setEdit(null)
+              save.reset()
             }
           }}
           aria-label={`Name of label "${category.name}"`}

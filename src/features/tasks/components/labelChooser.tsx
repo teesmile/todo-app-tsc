@@ -27,7 +27,8 @@ export function LabelChips({ ids }: { ids: string[] }) {
 
 interface LabelChooserProps {
   value: string[]
-  onChange: (ids: string[]) => void
+  /** One membership change: add (`on`) or remove this label. */
+  onToggle: (labelId: string, on: boolean) => void
   /** For the accessible name, e.g. `"Buy milk"` or "the new task". */
   subject: string
 }
@@ -37,7 +38,7 @@ interface LabelChooserProps {
  * a fieldset, applied as they're ticked, plus "Manage labels…". Escape or a
  * click outside closes it, and focus returns to the chip.
  */
-export function LabelChooser({ value, onChange, subject }: LabelChooserProps) {
+export function LabelChooser({ value, onToggle, subject }: LabelChooserProps) {
   const { categories, openManager } = useLabels()
   const panelId = useId()
   const [open, setOpen] = useState(false)
@@ -103,7 +104,7 @@ export function LabelChooser({ value, onChange, subject }: LabelChooserProps) {
                           <input
                             type="checkbox"
                             checked={chosen.includes(c.id)}
-                            onChange={e => onChange(e.target.checked ? [...chosen, c.id] : chosen.filter(id => id !== c.id))}
+                            onChange={e => onToggle(c.id, e.target.checked)}
                             className="h-4 w-4 accent-orange-500"
                           />
                           <span className={`h-2.5 w-2.5 rounded-full ${PALETTE[c.color].dot}`} aria-hidden="true" />
