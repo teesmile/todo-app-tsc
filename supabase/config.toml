@@ -351,6 +351,19 @@ skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
 
+[auth.external.google]
+enabled = true
+# Public by design (it appears in every sign-in redirect), so it's a literal:
+# an unset env() client_id would be pushed as the text "env(...)".
+client_id = "298652967892-gjpmpeq2amejod2646st3efhh42m9e01.apps.googleusercontent.com"
+# Unset locally on purpose: an unresolved env() secret is skipped by config push,
+# so the secret saved in the dashboard is kept.
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+redirect_uri = ""
+url = ""
+skip_nonce_check = false
+email_optional = false
+
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.
 [auth.web3.solana]
