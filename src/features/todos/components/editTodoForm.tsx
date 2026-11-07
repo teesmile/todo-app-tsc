@@ -1,29 +1,27 @@
 'use client'
 
-import type { Todo } from '@/types/api'
+import type { Task } from '@/features/tasks/store/types'
 import { Check, X } from 'lucide-react'
 import { useState } from 'react'
-import { useUpdateTodo } from '../hooks/useTodos'
+import { useAction } from '@/features/tasks/hooks/useAction'
+import { update } from '@/features/tasks/store/repository'
 
 interface EditTodoFormProps {
-  todo: Todo
+  todo: Task
   onSave: () => void
   onCancel: () => void
 }
 
 export function EditTodoForm({ todo, onSave, onCancel }: EditTodoFormProps) {
-  const [editText, setEditText] = useState(todo.todo)
-  const updateTodoMutation = useUpdateTodo()
+  const [editText, setEditText] = useState(todo.title)
+  const updateTask = useAction(update)
 
   const handleSave = async () => {
     if (!editText.trim())
       return
 
     try {
-      await updateTodoMutation.mutateAsync({
-        id: todo.id,
-        todo: editText.trim(),
-      })
+      await updateTask.run(todo.id, { title: editText })
       onSave()
     }
     catch (error) {
@@ -32,7 +30,7 @@ export function EditTodoForm({ todo, onSave, onCancel }: EditTodoFormProps) {
   }
 
   const handleCancel = () => {
-    setEditText(todo.todo)
+    setEditText(todo.title)
     onCancel()
   }
 
@@ -59,10 +57,10 @@ export function EditTodoForm({ todo, onSave, onCancel }: EditTodoFormProps) {
           type="button"
           onClick={handleSave}
           className="inline-flex items-center gap-1 px-3 py-1 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 disabled:opacity-50"
-          disabled={updateTodoMutation.isPending || !editText.trim()}
+          disabled={updateTask.pending || !editText.trim()}
         >
           <Check className="w-3 h-3" />
-          {updateTodoMutation.isPending ? 'Saving...' : 'Save'}
+          {updateTask.pending ? 'Saving...' : 'Save'}
         </button>
         <button
           type="button"
