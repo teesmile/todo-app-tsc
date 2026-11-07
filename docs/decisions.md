@@ -28,6 +28,13 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Codex review 4: Phase 2 left no way to delete a task
+Codex challenged: removing the detail route also removed the only Delete control, so users can't remove tasks. The plan's "nothing working is lost" overlooked that Phase 0 had already made those deletes persist.
+Verdict: AGREE; DISAGREE only with "not shippable", since `revamp` doesn't deploy until the checkpoint after Phase 7
+Because: the premise was stale. Phase 0 stopped the reseed that used to resurrect deleted rows, so from then on a delete from the detail page stuck. Restoring delete costs one button and one test. It also keeps delete inside the CRUD smoke check while Phase 3 replaces the data layer, which is exactly when a broken delete would otherwise go unnoticed until Phase 4.
+Changed: a Delete button on each list row (accessible name, disabled while pending, `role="alert"` on failure), and `todoList.test.tsx` (delete, remount from IndexedDB, still gone; fails without the button). The smoke check gains delete-then-reload steps, and `docs/plan.md` Phases 2 and 3 are updated. There's no confirmation or undo until Phase 4.
+Study: why a plan's "nothing is lost" claim has to be re-checked after every earlier phase changes the ground under it (search "stale preconditions").
+
 ## 2026-11-07 — Codex review 3: a write that aborts, and a Node range nothing could meet (8130665, 96f0605)
 Codex challenged: (1) `updateTodo` handles `complete` and `error` but not `abort`, so a transaction that aborts after its put succeeds leaves the promise pending forever; (2) `engines` says `>=20.9`, but Vitest 5 needs Node `^22.12` and jsdom 31 needs `^22.22.2`, so the declared minimum can't run the test gate.
 Verdict: AGREE on both; DISAGREE only with the option of choosing Node-20-compatible test tooling
