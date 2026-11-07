@@ -47,7 +47,14 @@ export function AddTaskForm({ titleRef }: { titleRef?: Ref<HTMLInputElement> }) 
             required
             aria-invalid={Boolean(addTask.error)}
             aria-describedby={`${id}-hint${addTask.error ? ` ${id}-error` : ''}`}
-            placeholder="What needs doing?"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                e.currentTarget.blur()
+              }
+            }}
+            aria-keyshortcuts="n"
+            placeholder="What needs doing? (press n)"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
         </div>

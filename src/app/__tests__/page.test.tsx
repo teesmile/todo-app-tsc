@@ -9,6 +9,15 @@ vi.mock('@/features/tasks/store/legacyImport', () => ({ runLegacyImport: vi.fn()
 const run = vi.mocked(runLegacyImport)
 
 describe('home page', () => {
+  it('labels each stats ring with its numbers in words', async () => {
+    run.mockResolvedValue({ status: 'no-legacy-db' })
+    render(<Home />)
+    expect(await screen.findByRole('img', { name: '0% completed: 0 of 5 tasks done' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '100% in progress: 5 of 5 tasks open' })).toBeInTheDocument()
+    expect(screen.getByText('Overdue', { selector: 'dt' }).nextElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Due today', { selector: 'dt' }).nextElementSibling).toHaveTextContent('1')
+  })
+
   afterEach(() => {
     resetLegacyImportForTests()
     run.mockReset()
