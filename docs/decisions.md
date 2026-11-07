@@ -28,6 +28,13 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Codex review 3: a write that aborts, and a Node range nothing could meet (8130665, 96f0605)
+Codex challenged: (1) `updateTodo` handles `complete` and `error` but not `abort`, so a transaction that aborts after its put succeeds leaves the promise pending forever; (2) `engines` says `>=20.9`, but Vitest 5 needs Node `^22.12` and jsdom 31 needs `^22.22.2`, so the declared minimum can't run the test gate.
+Verdict: AGREE on both; DISAGREE only with the option of choosing Node-20-compatible test tooling
+Because: (1) Reproduced: a test that aborts right after `put()` succeeds hung on the old code. The same class of bug was in `saveTodo` and `deleteTodo`, which resolved before commit, so all three now settle on `complete` and reject on `abort`. (2) Worse than stated: jsdom 31's range excluded this machine (22.22.1), so the gate was passing outside its support. Node 20 reached end of life on 2026-04-30, so supporting it isn't worth older tooling. jsdom moves to 29.1.1, `engines` becomes the intersection of every locked range (`^22.13.0 || ^24.0.0 || >=26.0.0`), and `engine-strict` makes a mismatch fail at install.
+Changed: `src/lib/indexedDB.ts` (`settle()`), `todoService.test.ts` (abort test; 8/8 pass); `package.json`, `.npmrc`, lockfile.
+Study: why a request's `success` isn't durability in IndexedDB (search "IDBTransaction complete vs request success").
+
 ## 2026-11-07 — Codex review 2: Phase 0 and the sync design could still lose or resurrect tasks (9a665b0)
 Codex challenged: (1) `updateTodo` reads and writes in separate transactions, so a racing delete is undone; (2) deleting `TodoAppDB` after the snapshot loses an old tab's later writes; (3) a `server_updated_at` cursor skips late commits, because `now()` is the transaction's start time, and it drops ties at page boundaries; (4) sign-out evicts rows but keeps the cursor, so they never come back; (5) the clamp leaves a fast-clock device's local copy permanently ahead; (6) `legacy-7` isn't a valid uuid. It also noted that RLS is still only a specification.
 Verdict: AGREE on all six; DISAGREE only with the fix for 3 (full reconciliation on every sync)
