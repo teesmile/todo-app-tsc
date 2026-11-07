@@ -1,12 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { toLocalDateString } from '../lib/dates'
 import { getDb, resetDbForTests } from '../store/db'
 import { add, listTasks, MAX_TITLE_LENGTH } from '../store/repository'
 import { TaskList } from './taskList'
-
-const today = toLocalDateString(new Date())
 
 /** Adds tasks one second apart, so newest-first order is deterministic. */
 async function addInOrder(...titles: string[]) {
@@ -48,12 +45,13 @@ describe('taskList', () => {
     const user = await renderList()
     const title = screen.getByLabelText('New task')
     await user.type(title, 'Call the bank')
-    fireEvent.change(screen.getByLabelText('Due date'), { target: { value: today } })
+    await user.click(screen.getByRole('button', { name: 'Due date for the new task: none' }))
+    await user.click(screen.getByRole('button', { name: 'Today' }))
     await user.click(screen.getByRole('button', { name: 'Add task' }))
 
     await waitFor(() => expect(titlesIn('Today')[0]).toBe('Call the bank'))
     expect(title).toHaveValue('')
-    expect(screen.getByLabelText('Due date')).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Due date for the new task: none' })).toBeInTheDocument()
   })
 
   it('shows the length limit as an alert, keeps the draft, and saves nothing', async () => {

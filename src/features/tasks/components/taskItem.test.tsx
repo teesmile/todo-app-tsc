@@ -1,18 +1,20 @@
 import type { Task } from '../store/types'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { nextDay, toLocalDateString } from '../lib/dates'
 import { getDb } from '../store/db'
 import { add } from '../store/repository'
 import { TaskItem } from './taskItem'
 
+const today = toLocalDateString(new Date())
 const stored = async (id: string) => (await getDb().tasks.get(id))!
 
 async function renderItem(overrides: Partial<Task> = {}) {
   const task = { ...(await add({ title: 'Buy oat milk' })), ...overrides }
   const onDelete = vi.fn()
   const user = userEvent.setup()
-  const view = render(<TaskItem task={task} onDelete={onDelete} />)
+  const view = render(<TaskItem task={task} onDelete={onDelete} today={today} now={new Date()} />)
   return { task, onDelete, user, ...view }
 }
 
@@ -73,14 +75,46 @@ describe('taskItem', () => {
     expect((await stored(task.id)).title).toBe('Buy oat milk')
   })
 
-  it('sets and clears the due date with a native date input', async () => {
-    const { task, user } = await renderItem()
-    const date = screen.getByLabelText('Due date for "Buy oat milk"')
-    expect(date).toHaveAttribute('type', 'date')
+  it('shows when it was added, automatically', async () => {
+    await renderItem()
+    expect(screen.getByText(/^Added today, \d{1,2}:\d{2}$/)).toBeInTheDocument()
+  })
 
-    await user.type(date, '2026-11-20')
-    await waitFor(async () => expect((await stored(task.id)).dueDate).toBe('2026-11-20'))
-    await user.clear(date)
+  it('sets the due date from a small Due chip: Today, Tomorrow, or none', async () => {
+    const { task, user } = await renderItem()
+    const chip = () => screen.getByRole('button', { name: /^Due date for "Buy oat milk"/ })
+    expect(chip()).toHaveAccessibleName('Due date for "Buy oat milk": none')
+    expect(screen.queryByDisplayValue(today)).not.toBeInTheDocument()
+
+    await user.click(chip())
+    await user.click(screen.getByRole('button', { name: 'Tomorrow' }))
+    await waitFor(async () => expect((await stored(task.id)).dueDate).toBe(nextDay(today)))
+    expect(chip()).toHaveFocus()
+  })
+
+  it('picks any date from the chip with a native date input', async () => {
+    const { task, user } = await renderItem()
+    await user.click(screen.getByRole('button', { name: /^Due date for/ }))
+    await user.click(screen.getByRole('button', { name: 'Pick a date…' }))
+    const date = screen.getByLabelText('Pick a date')
+    expect(date).toHaveAttribute('type', 'date')
+    expect(date).toHaveFocus()
+    fireEvent.change(date, { target: { value: '2026-12-24' } })
+    await waitFor(async () => expect((await stored(task.id)).dueDate).toBe('2026-12-24'))
+  })
+
+  it('clears a due date, and closes the chooser on Escape with focus back on the chip', async () => {
+    const { task, user } = await renderItem({ dueDate: today })
+    const chip = screen.getByRole('button', { name: /^Due date for/ })
+    expect(chip).toHaveTextContent('Due today')
+
+    await user.click(chip)
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('button', { name: 'Tomorrow' })).not.toBeInTheDocument()
+    expect(chip).toHaveFocus()
+
+    await user.click(chip)
+    await user.click(screen.getByRole('button', { name: 'No due date' }))
     await waitFor(async () => expect((await stored(task.id)).dueDate).toBeNull())
   })
 

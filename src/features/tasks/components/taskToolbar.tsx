@@ -54,9 +54,12 @@ export function TaskToolbar({ query, onQueryChange, filter, onFilterChange, show
 
       <fieldset>
         <legend className="mb-1 text-sm font-medium text-gray-700">Show</legend>
-        <div className="inline-flex flex-wrap gap-1 rounded-lg bg-gray-100 p-1">
+        {/* Full width on phones, each segment its natural width plus a share of
+            what's left, so all five fit on one line down to 360px; a compact
+            pill from tablet width. */}
+        <div className="flex w-full gap-1 rounded-lg bg-gray-100 p-1 md:inline-flex md:w-auto">
           {FILTERS.map(value => (
-            <label key={value} className="cursor-pointer">
+            <label key={value} className="flex-auto cursor-pointer md:flex-none">
               <input
                 type="radio"
                 name={`${id}-filter`}
@@ -65,7 +68,7 @@ export function TaskToolbar({ query, onQueryChange, filter, onFilterChange, show
                 onChange={() => onFilterChange(value)}
                 className="peer sr-only"
               />
-              <span className="block rounded-md px-3 py-1 text-sm text-gray-600 peer-checked:bg-white peer-checked:font-medium peer-checked:text-gray-900 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500">
+              <span className="block min-h-9 whitespace-nowrap rounded-md px-1.5 py-2 text-center text-sm text-gray-600 md:min-h-0 md:px-3 md:py-1 peer-checked:bg-white peer-checked:font-medium peer-checked:text-gray-900 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500">
                 {FILTER_LABELS[value]}
               </span>
             </label>

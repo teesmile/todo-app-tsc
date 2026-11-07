@@ -39,7 +39,7 @@ describe('typing while a save is in flight', () => {
     const save = deferred()
     vi.mocked(update).mockReturnValueOnce(save.promise)
     const user = userEvent.setup()
-    render(<TaskItem task={task} onDelete={() => {}} />)
+    render(<TaskItem task={task} onDelete={() => {}} today="2026-11-07" now={new Date(2026, 10, 7, 10)} />)
 
     await user.click(screen.getByRole('button', { name: 'Edit "Buy oat milk"' }))
     const field = screen.getByRole('textbox')
@@ -57,7 +57,7 @@ describe('typing while a save is in flight', () => {
     const save = deferred()
     vi.mocked(update).mockReturnValueOnce(save.promise).mockResolvedValueOnce(task)
     const user = userEvent.setup()
-    render(<TaskItem task={task} onDelete={() => {}} />)
+    render(<TaskItem task={task} onDelete={() => {}} today="2026-11-07" now={new Date(2026, 10, 7, 10)} />)
 
     await user.click(screen.getByRole('button', { name: 'Edit "Buy oat milk"' }))
     await user.type(screen.getByRole('textbox'), ' and bread{Enter}')
@@ -73,7 +73,7 @@ describe('typing while a save is in flight', () => {
     const save = deferred()
     vi.mocked(add).mockReturnValueOnce(save.promise)
     const user = userEvent.setup()
-    render(<AddTaskForm />)
+    render(<AddTaskForm today="2026-11-07" />)
 
     const field = screen.getByLabelText('New task')
     await user.type(field, 'Call the bank{Enter}')

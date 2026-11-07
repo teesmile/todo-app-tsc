@@ -44,13 +44,22 @@ const getStatus = () => currentStatus
 // The server render never imports anything.
 const getServerStatus = (): LegacyImportStatus => 'running'
 
+// Only the latest run may set the status: an earlier run that settles late
+// (a retry started while it was pending) must not overwrite a newer result.
+let generation = 0
+
 function startImport(): Promise<unknown> {
+  const run = ++generation
+  const settle = (status: LegacyImportStatus) => {
+    if (run === generation)
+      setStatus(status)
+  }
   setStatus('running')
-  importRun = runLegacyImport({ onBlocked: () => setStatus('blocked') })
-    .then(() => setStatus('done'))
+  importRun = runLegacyImport({ onBlocked: () => settle('blocked') })
+    .then(() => settle('done'))
     .catch((error) => {
       console.error('Bringing over tasks from the old version failed. The old data is untouched.', error)
-      setStatus('failed')
+      settle('failed')
     })
   return importRun
 }
@@ -66,6 +75,7 @@ export function retryLegacyImport(): Promise<unknown> {
 
 /** Forgets the shared run and status. Tests only. */
 export function resetLegacyImportForTests(): void {
+  generation += 1
   importRun = null
   currentStatus = 'running'
 }
