@@ -16,3 +16,14 @@ export function addDays(date: Date, days: number): Date {
   next.setDate(next.getDate() + days)
   return next
 }
+
+/** Parses `YYYY-MM-DD` as a local date, at noon so no DST shift can move the day. */
+export function parseLocalDate(value: string): Date {
+  const [y, m, d] = value.split('-').map(Number)
+  return new Date(y, m - 1, d, 12)
+}
+
+/** The calendar day after `value`, as `YYYY-MM-DD`. */
+export function nextDay(value: string): string {
+  return toLocalDateString(addDays(parseLocalDate(value), 1))
+}
