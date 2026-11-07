@@ -2,7 +2,7 @@
 
 The findings this plan fixes are in `docs/audit.md`. Each phase lands as its own commits on `revamp`, and a phase starts only after the one before it passes its **Verified by** checks. Every phase ends with these gates passing:
 - `pnpm lint && pnpm build && pnpm test` (from Phase 0 on);
-- `pnpm test:db` as well, from Phase 8 on;
+- `pnpm test:db` as well, from Phase 9 on;
 - the **CRUD smoke check** (from Phase 2 on): in `pnpm dev`, add a task, edit it, complete it, delete it, then hard-reload. The data must match what was on screen before the reload.
 
 Each choice marked ◆ gets an entry in `docs/decisions.md`. The review history is in `docs/decisions.md`; Codex review 1 (2026-11-07) reshaped Phases 0, 2, 3, 4 and 11.
@@ -16,7 +16,7 @@ These went beyond the original brief. The owner approved all of them on 2026-11-
 3. **Drop TanStack Query.** It's built for caching *remote* data: stale times, refetching, deduping. Here the UI reads only local data, which changes only when we write to it. A reactive read of IndexedDB gives instant updates. The alternative was keeping Query and invalidating after every write; it lost because invalidation is how the current detail page shows stale data (audit §1.7). **Addendum (owner):** the reactive read is Dexie's `useLiveQuery`. Phase 3 confirms it and logs it.
 4. **A "No date" group and a "Done" section.** The four requested groups (Overdue, Today, Tomorrow, Upcoming) have no place for a task without a due date, or for completed tasks in the "All" view. No-date tasks go after Upcoming; completed tasks collapse into a "Done" section at the bottom.
 5. **Editing a sample task makes it yours.** "Clear sample tasks" removes only the tasks still marked as samples. Editing a sample's title or date clears the mark, so clearing samples never deletes something you've worked on. Just completing a sample doesn't count as editing it.
-6. **Optional accounts, still local-first (owner).** Anyone can use the app immediately as a guest. Signing in syncs tasks across devices through Supabase: email and password, or Google, with a row-level-security Postgres table. Dexie stays the only thing the UI reads. Phases 8 and 9.
+6. **Optional accounts, still local-first (owner).** Anyone can use the app immediately as a guest. Signing in syncs tasks across devices through Supabase: email and password, or Google, with a row-level-security Postgres table. Dexie stays the only thing the UI reads. Phases 9 and 10.
 
 ## Invariants every phase must keep
 
@@ -38,11 +38,11 @@ These come out of Codex reviews 1 and 2. Any phase that breaks one has failed, w
 - Turn on antfu's React and Next rule sets (`antfu({ react: true, nextjs: true })`). Run `pnpm lint --fix` once, as a **formatting-only commit**, then fix the remaining real errors (audit §3.8) by hand in a separate commit.
 - Add Vitest, `@testing-library/react`, `@testing-library/user-event`, `@testing-library/jest-dom`, `jsdom` and `@vitejs/plugin-react`. Add `vitest.config.ts` with the `@/` alias and a setup file, plus `"test": "vitest run"` and `"test:watch": "vitest"`.
 - Write `src/features/todos/tests/todoItem.test.tsx`, which is currently 0 bytes. It renders the current `TodoItem` inside a `QueryClientProvider` and asserts that the text renders, completed tasks get struck through, and clicking the toggle calls the update mutation.
-- **Portfolio correction, today** (in `~/projects/personal/nextjs/my-portfolio`, under its own `CLAUDE.md`). Remove the claims that are false right now: TanStack Router and Form, Zod, the `Pagination` split, and "mobile first" (rows marked **now** in the Phase 11 table). Replace them with one honest line about the current app. Phase 11 writes the v1 copy.
+- **Portfolio correction, today** (in `~/projects/personal/nextjs/my-portfolio`, under its own `CLAUDE.md`). Remove the claims that are false right now: TanStack Router and Form, Zod, the `Pagination` split, and "mobile first" (rows marked **now** in the Phase 12 table). Replace them with one honest line about the current app. Phase 12 writes the v1 copy.
 
 **Why** Every later phase is judged by lint, build and tests, so those gates have to exist and pass first. Keeping the auto-fix in its own commit means the 1174-line reformat never mixes with a real change in a diff or in `git blame`. The `TodoItem` test is a characterization test: it pins the current behaviour so the test setup is proven before the component is replaced. The overwrite fix is one deleted line, so there's no reason to keep a data-loss bug alive through two phases of unrelated work. The portfolio fix needs none of v1, and the false claims are live on the resume today.
 
-**Verified by** `pnpm lint` exits 0. `pnpm test` runs one file and passes. `pnpm build` passes (still with `--no-lint` until Phase 1). `git show --stat` on the format commit shows formatting only. Edit a task, hard-reload, and the edit is still there. The Network tab shows no dummyjson request on load. In the portfolio, the `grep` from Phase 11 finds no TanStack, Zod or Pagination claim, and its `pnpm lint && pnpm build` passes.
+**Verified by** `pnpm lint` exits 0. `pnpm test` runs one file and passes. `pnpm build` passes (still with `--no-lint` until Phase 1). `git show --stat` on the format commit shows formatting only. Edit a task, hard-reload, and the edit is still there. The Network tab shows no dummyjson request on load. In the portfolio, the `grep` from Phase 12 finds no TanStack, Zod or Pagination claim, and its `pnpm lint && pnpm build` passes.
 
 ## Phase 1 — Upgrade to Next.js 16
 **Changes**
@@ -78,7 +78,7 @@ These come out of Codex reviews 1 and 2. Any phase that breaks one has failed, w
 
 **Changes**
 - Add `dexie` (4.4.x) and `dexie-react-hooks` (4.4.x). The hooks package accepts React ≥16 and Dexie ≥4.2, so React 19 is fine.
-- `src/features/tasks/store/db.ts` defines a `Dexie` subclass for a new database `tasks`. The schema includes the sync fields now, so Phase 9 doesn't need a data migration:
+- `src/features/tasks/store/db.ts` defines a `Dexie` subclass for a new database `tasks`. The schema includes the sync fields now, so Phase 10 doesn't need a data migration:
   ```ts
   db.version(1).stores({
     tasks: 'id, ownerId, [ownerId+dirty], isSample',
@@ -91,7 +91,7 @@ These come out of Codex reviews 1 and 2. Any phase that breaks one has failed, w
     - `dueDate` is `'YYYY-MM-DD' | null`;
     - `isSample` and `dirty` are `0 | 1`, because booleans can't be IndexedDB keys;
     - the timestamps are epoch ms numbers, and `deletedAt` is `number | null`;
-    - `rev` is a local mutation counter that every local write increments. Push acknowledgement (Phase 9) compares revisions, not timestamps, because two edits can land in the same millisecond and a clamped server timestamp won't match the local one.
+    - `rev` is a local mutation counter that every local write increments. Push acknowledgement (Phase 10) compares revisions, not timestamps, because two edits can land in the same millisecond and a clamped server timestamp won't match the local one.
   - `completed` and `deletedAt` aren't indexed; they're filtered in memory.
   - `meta` is a key–value store for sync cursors, once-only flags and `installId`, a random UUID written in `populate` that identifies this browser's database.
 - **Repository** of plain async functions over `db.tasks`. Every write runs inside a `db.transaction('rw', …)` that reads the current row first:
@@ -128,7 +128,7 @@ The log entry's alternative is `idb` plus `useSyncExternalStore`: smaller, but i
 
 Tombstones instead of hard deletes serve two purposes:
 - Undo becomes "clear one field" instead of "write back a snapshot", which closes Codex's stale-restore case: tab B's edit can't be overwritten by tab A's undo.
-- Phase 9 needs tombstones anyway so that deletes don't come back from another device.
+- Phase 10 needs tombstones anyway so that deletes don't come back from another device.
 
 Putting the sync fields in the v1 schema costs nothing now and means users' data never has to go through a Dexie version upgrade later. Rewiring the old components in the same phase as removing the old store is what keeps every gate green between phases (Codex review 1). Storing `dueDate` as a local calendar date string, not a `Date`, avoids a task due "today" sliding to yesterday across timezones; a timestamp at local midnight lost because it encodes the timezone at write time.
 
@@ -164,7 +164,7 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
   - Delete calls `remove()`, which tombstones the row (Phase 3).
   - A toast with an Undo button shows for 6s, announced through an `aria-live="polite"` region; Undo calls `undoRemove(token)`.
   - Focus moves to the next row, or to the group heading if the row was last.
-  - A tombstone stays local until the toast has closed, so a synced delete never needs to be undone (Phase 9).
+  - A tombstone stays local until the toast has closed, so a synced delete never needs to be undone (Phase 10).
   - Guest tombstones older than 24 hours are purged on boot, because nothing will ever sync them. (First built as "older than the undo window"; Codex review 6 showed another tab's boot could then delete a row a paused Undo still pointed at.)
 - **Add**: a single-line form at the top of the list (title plus optional date). It becomes a bottom sheet on phones in Phase 6.
 - **Clear sample tasks** (from the v1 brief, which no phase had owned): a button under the list while any samples remain. It clears them with one Undo for all of them; `clearSamples()` returns a token per task.
@@ -202,7 +202,7 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
    - The due date is optional and secondary: a small Due chip offering Today, Tomorrow and Pick a date (plus No due date once one is set), not a bare date field beside the title. It reads "Due today", "Due Fri 13 Nov" or "Overdue · Tue 3 Nov".
    - A task added while the Today filter is on gets today as its due date, and the add form's chip shows it before adding.
 4. **On phones, adding opens a bottom sheet** from a floating "Add a task" button. The sheet is a native `<dialog>` opened with `showModal()`, slides up (instantly with reduced motion), and has the title field focused. It closes on Escape, the backdrop, Close, or after adding, which announces "Added …", and focus returns to the button. On phones, `n` opens it.
-5. **A friendly header:** "Good morning, Toni · Saturday 7 November". A first name is asked for once, optional and skippable (the skip is remembered too), and kept on the device in the `meta` store. In Phase 8 a signed-in user's name comes from the account instead. The greeting and date render only in the browser, because the page is prerendered at build time and a build-time greeting would be stale and cause a hydration error.
+5. **A friendly header:** "Good morning, Toni · Saturday 7 November". A first name is asked for once, optional and skippable (the skip is remembered too), and kept on the device in the `meta` store. In Phase 9 a signed-in user's name comes from the account instead. The greeting and date render only in the browser, because the page is prerendered at build time and a build-time greeting would be stale and cause a hydration error.
 
 **Verified by**
 - **Unit tests:** the "Added" and "Due" wording, including the year end, and the greeting by hour.
@@ -215,7 +215,47 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
 - **Real-browser screenshots at 360, 390 and 768**, measured for horizontal overflow, overlapping text boxes, text off-screen, clipped labels, and the filters on one line. The open sheet at 390 is measured for being modal and having the title field focused.
 - **Browser smoke checks:** Phases 4 and 5, and the legacy import.
 
-## Phase 7 — Accessibility pass
+## Phase 7 — Priorities and categories ◆
+**Status: done.** The decisions are in `docs/decisions.md`.
+
+Requested by the owner on 2026-11-07: bring back the old app's dead "Vital Task" and "Task Categories" links (audit §3.3) as real features. Inserted after the layout phase; the later phases moved up by one.
+
+**Changes**
+- **Vital:**
+  - Any task can be flagged Vital with a star toggle on its row (`aria-pressed`).
+  - A Vital filter joins All, Active, Done, Today and Overdue.
+  - Within each date group, Vital tasks come first. Done keeps completion order, because ranking finished work by importance isn't useful.
+- **Categories (labels):**
+  - Labels you create, each with a name (up to 40 characters, unique per person, ignoring case) and a colour from a fixed palette of eight chosen for contrast.
+  - A task can carry several labels; they show as small coloured chips on its row, and a Labels chip opens a checklist to assign them.
+  - A Labels manager (a `<dialog>`) creates, renames, recolours and deletes labels. Delete asks for confirmation, says how many tasks use the label, and removes it from those tasks in the same transaction.
+  - A "Label" select next to the filters narrows the list to one label (`?label=` in the URL). An unknown or deleted label id is treated as "all labels".
+- **Defaults that never hide a new task:** with the Vital filter on, a new task is vital; with a label filter on, it gets that label. This matches the Today rule from Phase 6.
+- **Dexie schema version 2:**
+  - Adds a `categories` table (`id, ownerId, [ownerId+dirty]`) with the same sync fields as tasks (`dirty`, `rev`, `deletedAt`, timestamps).
+  - Adds a multi-entry index on `tasks.categoryIds`.
+  - The upgrade only adds defaults to existing tasks (`vital: 0`, `categoryIds: []`); it never rewrites or drops a row.
+  - New databases are created at version 2 directly, and their `populate` seeds one sample task as Vital.
+- **Rendering ignores label ids that aren't live labels.** After sync, a task may still point at a label deleted on another device.
+
+**Why** Both features were promised by the old dashboard's navigation and never built. Vital-first ordering inside the existing date groups keeps one mental model (when), with importance as a tiebreak, instead of a second competing sort. Labels are many-to-many because "work" and "errand" aren't exclusive. A fixed palette guarantees readable chips in both themes; free colour picking can't.
+
+The migration is additive because the bar is that nothing the user wrote is ever lost. Dexie's `upgrade()` runs inside the version-change transaction, so a failure rolls the whole upgrade back and leaves version 1 intact.
+
+**Verified by**
+- **Unit tests:**
+  - `filterTasks` with Vital, with a label, and with both plus search;
+  - `groupTasks` putting Vital first and leaving Done alone;
+  - label name validation.
+- **Migration test:** a real version-1 database with tasks, a tombstone and `meta` entries opens as version 2 with every row and field intact plus the new defaults; reopening is idempotent.
+- **Component tests:**
+  - the Vital toggle;
+  - assigning and removing labels;
+  - the label manager: create, a duplicate name rejected, rename, recolour, and delete with confirmation removing the label from its tasks;
+  - the Vital and label filters, and their defaults for new tasks.
+- **Browser checks:** the layout screenshots at 360, 390 and 768 still show no overlap or sideways scroll with labels on the rows, and the smoke checks still pass.
+
+## Phase 8 — Accessibility pass
 **Changes**
 - Each group is a `<section>` with a heading, holding a `<ul>` (built in Phase 4; check it here). There's one `<h1>`.
 - A skip link and visible `:focus-visible` rings.
@@ -228,11 +268,11 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
 **Verified by** axe reports zero violations in the component tests. A keyboard-only run covers every feature without the mouse. A screen-reader run (Orca on Linux, plus VoiceOver on a phone) covers add, complete, edit, delete and undo, with each change heard. Lighthouse Accessibility scores 100.
 
 ### Checkpoint — ship the guest app
-Merge `revamp` to `main` and deploy, so the live link on the resume shows a working app while Phases 8–10 are built. Before merging, update the README's top section with a one-line pitch, a screenshot and the live link; Phase 11 does the full README. **Verified by** the CRUD smoke check on the production URL, on a phone.
+Merge `revamp` to `main` and deploy, so the live link on the resume shows a working app while Phases 9–11 are built. Before merging, update the README's top section with a one-line pitch, a screenshot and the live link; Phase 12 does the full README. **Verified by** the CRUD smoke check on the production URL, on a phone.
 
 **Why** (Codex review 1) The recruiter-facing result shouldn't wait for sync and offline work. A working guest app is already a complete product.
 
-## Phase 8 — Accounts: Supabase project, schema, row-level security, sign-in ◆
+## Phase 9 — Accounts: Supabase project, schema, row-level security, sign-in ◆
 **Prerequisites**
 - **Docker**, for the Supabase local stack. It isn't installed on this machine today.
 - A Google Cloud OAuth client, for Google sign-in.
@@ -249,6 +289,16 @@ Merge `revamp` to `main` and deploy, so the live link on the resume shows a work
   - `created_at`, `updated_at`, `completed_at`, `deleted_at` as `timestamptz` (`updated_at not null`)
   - `server_updated_at timestamptz not null default now()`
   - an index on `(user_id, server_updated_at, id)`, matching the pull's keyset order
+  - `vital boolean not null default false` and `category_ids uuid[] not null default '{}'` (Phase 7)
+- **Table** `public.categories` (Phase 7), with the same sync shape as `tasks`:
+  - `id uuid primary key`
+  - `user_id uuid not null default auth.uid() references auth.users on delete cascade`
+  - `name text not null check (char_length(name) between 1 and 40)`
+  - `color text not null check (color in (<the eight palette keys>))`
+  - `created_at`, `updated_at`, `deleted_at` as `timestamptz`, and `server_updated_at timestamptz not null default now()`
+  - an index on `(user_id, server_updated_at, id)`
+  - the same RLS policies, the same `before update` trigger (last write wins, terminal tombstones, clamp, `server_updated_at`), and the same 8s statement timeout
+  - no database-level unique constraint on the name: two devices can create "Work" offline, and a unique index would make the second push fail. The client prevents duplicates locally, and Phase 10 shows a duplicate pair with a "Merge" action rather than rejecting one.
 - **Row-level security**:
   - `alter table tasks enable row level security`, plus `revoke all on tasks from anon`.
   - Policies for `select`, `insert` and `update`, `to authenticated`, `using ((select auth.uid()) = user_id)`, with the same `with check` on insert and update.
@@ -259,7 +309,7 @@ Merge `revamp` to `main` and deploy, so the live link on the resume shows a work
   - if `new.updated_at <= old.updated_at`, the incoming fields are discarded and only the tombstone rule applies (last write wins, decided atomically in the database);
   - `updated_at` is clamped to at most `now() + interval '5 minutes'`;
   - `server_updated_at := now()`.
-- **Bounded transactions**: the migration sets `alter role authenticated set statement_timeout = '8s'`. Each PostgREST request is a single transaction, so a write can't commit more than 8s after its `server_updated_at` stamp. Phase 9's pull overlap relies on that bound.
+- **Bounded transactions**: the migration sets `alter role authenticated set statement_timeout = '8s'`. Each PostgREST request is a single transaction, so a write can't commit more than 8s after its `server_updated_at` stamp. Phase 10's pull overlap relies on that bound.
 
   A `before insert` trigger applies the same clamp and sets `server_updated_at`.
 - **Client**: `@supabase/supabase-js` (2.x) with `createClient(url, publishableKey, { auth: { flowType: 'pkce', persistSession: true, detectSessionInUrl: true } })`.
@@ -279,7 +329,7 @@ Merge `revamp` to `main` and deploy, so the live link on the resume shows a work
 **Free plan, and how the plan handles it** (checked 2026-11-07 on supabase.com/pricing and the docs):
 - The limits are 2 active projects, a 500 MB database, 5 GB egress, 50,000 monthly active users, and 200 concurrent realtime connections. A task row is well under 1 kB, so these limits aren't the constraint.
 - **Idle projects are paused after 7 days of low activity**, measured by database queries; dashboard visits don't count. Supabase emails a warning first, and a paused project can be restored from the dashboard for up to a year. The plan handles it in three layers:
-  1. **The app doesn't depend on Supabase being up.** A paused, unreachable or misconfigured backend surfaces as "Accounts unavailable". Signed-in users keep working on their local copy with changes queued (Phase 9), guests are unaffected, and the sign-in dialog explains instead of failing silently.
+  1. **The app doesn't depend on Supabase being up.** A paused, unreachable or misconfigured backend surfaces as "Accounts unavailable". Signed-in users keep working on their local copy with changes queued (Phase 10), guests are unaffected, and the sign-in dialog explains instead of failing silently.
   2. **Keep-alive** (◆): a scheduled GitHub Actions workflow calls a `public.ping()` SQL function (returns `1`, executable by `anon`, touches no table) every 3 days, using only the publishable key. This is a common practice but not endorsed by Supabase, so log it. If the project still pauses, it means a table-free query isn't counted as activity. In that case switch the ping to a one-row read from a dedicated `public.heartbeat` table readable by `anon`. Check after the first 8 idle days. The alternative is the paid plan, which never pauses; that lost because it costs money for a portfolio project with almost no traffic.
   3. **Restore procedure** written in the README: what to do if the warning email arrives.
 - **Built-in email only delivers to the project's team members, and sends at most 2 messages per hour.** That means public email sign-up can't work on the default email service at all. Before email sign-up is enabled in production, configure **custom SMTP** with a transactional email provider; Supabase's default limit then becomes 30 emails per hour, adjustable under Auth → Rate Limits. Google sign-in sends no email, so it works either way. Disabling email confirmation was rejected: it lets anyone register an address they don't own.
@@ -288,7 +338,7 @@ Merge `revamp` to `main` and deploy, so the live link on the resume shows a work
 
 `server_updated_at` exists because the client's `updated_at` can't be used as a pull cursor. A device that was offline for a week pushes edits with week-old timestamps, which are *older* than every other device's cursor, so they'd never be pulled. A server-assigned time always moves forward.
 
-**Verified by** These `pnpm test:db` tests, each with two real users A and B against the local stack:
+**Verified by** These `pnpm test:db` tests, each with two real users A and B against the local stack, run for both `tasks` and `categories`:
 - **Reads:** B's `select` returns none of A's rows. An `anon` client's `select` returns nothing.
 - **Writes:** B's `update … where id = <A's id>` affects 0 rows. B's insert with `user_id = A` is rejected. B's `upsert` of a row using A's id fails and leaves A's row unchanged. B can't change `user_id` on B's own row.
 - **Trigger rules:**
@@ -299,8 +349,9 @@ Merge `revamp` to `main` and deploy, so the live link on the resume shows a work
 
 Manually: sign up with email (confirmation arrives through custom SMTP), sign in with Google, and sign out, on the production URL. With the env vars removed, the build is guest-only and the sign-in button is hidden.
 
-## Phase 9 — Sync ◆
+## Phase 10 — Sync ◆
 **Changes**
+- **Two tables, one engine.** Categories (Phase 7) sync exactly like tasks: the same dirty/rev push, the same overlap pull and the same tombstone rules. Push categories before tasks, so a task never arrives on the server pointing at a label the server hasn't seen. A task's `vital` and `categoryIds` are ordinary fields under the same last-write-wins trigger. Clients ignore label ids that aren't live labels, because a label can be deleted on one device while another assigns it offline.
 - **`src/features/tasks/sync/`** is an engine behind a `Remote` interface (`pull(since)`, `push(rows)`). It has a Supabase implementation and an in-memory fake for unit tests. The UI never calls it; it only writes to Dexie, and live queries pick up the result.
 - **Push**:
   - Send rows with `ownerId = user` and `dirty = 1`, skipping tombstones still inside their undo window. Remember each row's `rev`.
@@ -312,7 +363,7 @@ Manually: sign up with email (confirmation arrives through custom SMTP), sign in
   A device whose clock runs fast therefore stores the server's clamped timestamp, not its own. Its local copy can't stay "ahead" of the server and win later comparisons (Codex review 2).
 - **Pull**:
   - Fetch rows with `server_updated_at >= meta.cursor[user] − 60s`, ordered by `(server_updated_at, id)`, in keyset pages (`> (last_ts, last_id)`), so equal timestamps can't fall between pages.
-  - The 60-second overlap covers late commits. `now()` is the transaction's *start* time, so a transaction stamped earlier can commit after a pull has moved past its stamp. The 8s statement timeout (Phase 8) bounds that lag, and 60s is well beyond it. Re-applying rows from the overlap is harmless because applying is idempotent.
+  - The 60-second overlap covers late commits. `now()` is the transaction's *start* time, so a transaction stamped earlier can commit after a pull has moved past its stamp. The 8s statement timeout (Phase 9) bounds that lag, and 60s is well beyond it. Re-applying rows from the overlap is harmless because applying is idempotent.
   - Apply each page in one transaction. The client doesn't compare timestamps:
     - an unknown id is inserted;
     - a local row that isn't dirty is replaced by the server's row;
@@ -357,13 +408,14 @@ The conflict rule runs in exactly one place: the Postgres trigger, which compare
   - **fast clock:** device A's clock is 1 hour ahead. A edits, then B edits 10 minutes later in real time; both devices converge on B's edit, and A's local `updatedAt` equals the server's clamped value;
   - **acknowledgement race:** an edit made between push and acknowledgement stays dirty and is pushed next time;
   - concurrent edits to different tasks are both kept, and on the same task the newer one wins;
+  - a label created on A and assigned on B after syncing arrives with its colour, and a label deleted on A disappears from B's tasks without touching their other fields;
   - the import is idempotent;
   - an unreachable remote leaves the app usable with dirty rows kept, and they sync once the remote returns;
   - sign-out with unsynced rows keeps them.
-- **`pnpm test:db`** runs the same delete-then-edit scenario with two real clients signed in as one user, plus the Phase 8 cross-user tests on synced data. It also runs two concurrent transactions to show that a later commit with an earlier `server_updated_at` is still pulled, and pushes an imported legacy task end to end.
+- **`pnpm test:db`** runs the same delete-then-edit scenario with two real clients signed in as one user, plus the Phase 9 cross-user tests on synced data. It also runs two concurrent transactions to show that a later commit with an earlier `server_updated_at` is still pulled, and pushes an imported legacy task end to end.
 - **Manually**: two browsers signed in as one user, one in airplane mode; delete on one, edit on the other, reconnect, and the task is gone on both.
 
-## Phase 10 — Installable and offline ◆
+## Phase 11 — Installable and offline ◆
 **Changes**
 - `src/app/manifest.ts` (name, icons at 192, 512 and maskable, `display: standalone`, theme colour).
 - A service worker that precaches every file the static export emits and serves the app shell for navigations. Choose the tool at the start of the phase:
@@ -383,7 +435,7 @@ The conflict rule runs in exactly one place: the Postgres trigger, which compare
 - Cache Storage contains no `supabase.co` entries.
 - Lighthouse 12 no longer has a PWA category, so installability is checked in the Application panel instead.
 
-## Phase 11 — README and portfolio
+## Phase 12 — README and portfolio
 **Changes** Replace `README.md` with:
 - one-line pitch;
 - a screenshot of phone and desktop side by side, plus a 10-second GIF of add → complete → delete → undo;
@@ -392,7 +444,7 @@ The conflict rule runs in exactly one place: the Postgres trigger, which compare
 - a "How it's built" section of five lines: local-first Dexie store, optional Supabase sync with row-level security, static export, service worker, tests;
 - the stack as badges or a single line;
 - `pnpm install && pnpm dev`, noting that it runs guest-only without `.env.local`, and how to fill it from `.env.example`;
-- the Supabase restore procedure (Phase 8);
+- the Supabase restore procedure (Phase 9);
 - links to `docs/decisions.md` for the reasoning.
 
 **Portfolio copy that must change** (in `~/projects/personal/nextjs/my-portfolio`)
@@ -437,4 +489,4 @@ Edit the portfolio under its own `CLAUDE.md`, not this one. Its pre-commit hook 
 ## Done means
 - Every audit finding is either fixed or listed in `docs/decisions.md` as consciously deferred.
 - `pnpm lint && pnpm build && pnpm test` are clean on a fresh clone, and `pnpm test:db` is green in CI.
-- The Phase 9 two-device delete check and the Phase 10 offline check pass on a real phone.
+- The Phase 10 two-device delete check and the Phase 11 offline check pass on a real phone.

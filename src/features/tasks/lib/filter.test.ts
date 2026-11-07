@@ -6,7 +6,7 @@ const today = '2026-11-07'
 let n = 0
 function task(title: string, overrides: Partial<Task> = {}): Task {
   n += 1
-  return { id: `t${n}`, ownerId: 'guest', title, completed: false, dueDate: null, isSample: 0, dirty: 0, rev: 1, createdAt: n, updatedAt: n, completedAt: null, deletedAt: null, ...overrides }
+  return { id: `t${n}`, ownerId: 'guest', title, completed: false, dueDate: null, isSample: 0, dirty: 0, rev: 1, createdAt: n, updatedAt: n, completedAt: null, deletedAt: null, vital: 0, categoryIds: [], ...overrides }
 }
 
 const overdueOpen = task('Renew the passport', { dueDate: '2026-11-01' })

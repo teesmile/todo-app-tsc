@@ -10,6 +10,8 @@ interface AddTaskSheetProps {
   onOpenChange: (open: boolean) => void
   today: string
   defaultDue: string | null
+  defaultVital?: boolean
+  defaultLabel?: string | null
   onAdded: (task: Task) => void
 }
 
@@ -21,7 +23,7 @@ interface AddTaskSheetProps {
  * field takes focus each time. Adding closes the sheet; focus returns to the
  * Add button.
  */
-export function AddTaskSheet({ open, onOpenChange, today, defaultDue, onAdded }: AddTaskSheetProps) {
+export function AddTaskSheet({ open, onOpenChange, today, defaultDue, defaultVital = false, defaultLabel = null, onAdded }: AddTaskSheetProps) {
   const headingId = useId()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const fabRef = useRef<HTMLButtonElement>(null)
@@ -91,6 +93,8 @@ export function AddTaskSheet({ open, onOpenChange, today, defaultDue, onAdded }:
             titleRef={titleRef}
             today={today}
             defaultDue={defaultDue}
+            defaultVital={defaultVital}
+            defaultLabel={defaultLabel}
             autoFocus
             onAdded={(task, { draftLeft }) => {
               // Text typed while the add was saving is the next task: keep the

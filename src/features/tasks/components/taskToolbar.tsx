@@ -2,6 +2,7 @@
 
 import type { Ref } from 'react'
 import type { TaskFilter } from '../lib/filter'
+import type { Category } from '../store/types'
 import { Search } from 'lucide-react'
 import { useId } from 'react'
 import { FILTER_LABELS, FILTERS } from '../lib/filter'
@@ -14,6 +15,11 @@ interface TaskToolbarProps {
   /** How many tasks the current filter and search show, announced politely. */
   shown: number | undefined
   searchRef?: Ref<HTMLInputElement>
+  categories: Category[]
+  /** The label filter: a label id, or null for every label. */
+  label: string | null
+  onLabelChange: (label: string | null) => void
+  onManageLabels: () => void
 }
 
 /**
@@ -22,7 +28,7 @@ interface TaskToolbarProps {
  * group, Overdue, 3 of 5". The radios are visually hidden and the labels draw
  * the segmented control, focus ring included.
  */
-export function TaskToolbar({ query, onQueryChange, filter, onFilterChange, shown, searchRef }: TaskToolbarProps) {
+export function TaskToolbar({ query, onQueryChange, filter, onFilterChange, shown, searchRef, categories, label, onLabelChange, onManageLabels }: TaskToolbarProps) {
   const id = useId()
 
   return (
@@ -54,12 +60,11 @@ export function TaskToolbar({ query, onQueryChange, filter, onFilterChange, show
 
       <fieldset>
         <legend className="mb-1 text-sm font-medium text-gray-700">Show</legend>
-        {/* Full width on phones, each segment its natural width plus a share of
-            what's left, so all five fit on one line down to 360px; a compact
-            pill from tablet width. */}
-        <div className="flex w-full gap-1 rounded-lg bg-gray-100 p-1 md:inline-flex md:w-auto">
+        {/* Six filters: a 3×2 grid on phones, so none spills out of the card at
+            360px; one compact pill from tablet width. */}
+        <div className="grid w-full grid-cols-3 gap-1 rounded-lg bg-gray-100 p-1 md:inline-flex md:w-auto">
           {FILTERS.map(value => (
-            <label key={value} className="flex-auto cursor-pointer md:flex-none">
+            <label key={value} className="min-w-0 cursor-pointer md:flex-none">
               <input
                 type="radio"
                 name={`${id}-filter`}
@@ -75,6 +80,31 @@ export function TaskToolbar({ query, onQueryChange, filter, onFilterChange, show
           ))}
         </div>
       </fieldset>
+
+      <div className="flex flex-wrap items-end gap-2">
+        {categories.length > 0 && (
+          <div>
+            <label htmlFor={`${id}-label`} className="mb-1 block text-sm font-medium text-gray-700">Label</label>
+            <select
+              id={`${id}-label`}
+              value={label ?? ''}
+              onChange={e => onLabelChange(e.target.value || null)}
+              className="min-h-11 rounded-lg border border-gray-300 bg-white px-2 text-sm md:min-h-9"
+            >
+              <option value="">All labels</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onManageLabels}
+          aria-haspopup="dialog"
+          className="min-h-11 rounded-lg px-2 text-sm font-medium text-orange-700 underline-offset-4 hover:underline md:min-h-9"
+        >
+          Manage labels
+        </button>
+      </div>
 
       <p aria-live="polite" className="sr-only">
         {shown === undefined ? '' : `${shown} task${shown === 1 ? '' : 's'} shown`}

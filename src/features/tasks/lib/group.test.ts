@@ -19,6 +19,8 @@ function task(overrides: Partial<Task> = {}): Task {
     updatedAt: n,
     completedAt: null,
     deletedAt: null,
+    vital: 0,
+    categoryIds: [],
     ...overrides,
   }
 }

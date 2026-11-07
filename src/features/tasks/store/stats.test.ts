@@ -4,7 +4,7 @@ import { computeStats } from './stats'
 
 const today = '2026-11-07'
 function task(i: number, overrides: Partial<Task> = {}): Task {
-  return { id: `t${i}`, ownerId: 'guest', title: `Task ${i}`, completed: false, dueDate: null, isSample: 0, dirty: 0, rev: 1, createdAt: i, updatedAt: i, completedAt: null, deletedAt: null, ...overrides }
+  return { id: `t${i}`, ownerId: 'guest', title: `Task ${i}`, completed: false, dueDate: null, isSample: 0, dirty: 0, rev: 1, createdAt: i, updatedAt: i, completedAt: null, deletedAt: null, vital: 0, categoryIds: [], ...overrides }
 }
 
 describe('computeStats', () => {

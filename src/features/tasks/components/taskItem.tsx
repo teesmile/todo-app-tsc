@@ -1,7 +1,7 @@
 'use client'
 
 import type { Task } from '../store/types'
-import { Trash2 } from 'lucide-react'
+import { Star, Trash2 } from 'lucide-react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { useAction } from '../hooks/useAction'
 import { formatAdded } from '../lib/dates'
@@ -9,6 +9,7 @@ import { saveErrorMessage } from '../lib/errors'
 import { MAX_TITLE_LENGTH, TitleConflictError, update } from '../store/repository'
 import { DueChooser } from './dueChooser'
 import { useEditDrafts } from './editDrafts'
+import { LabelChips, LabelChooser } from './labelChooser'
 
 interface TaskItemProps {
   task: Task
@@ -51,6 +52,8 @@ export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps)
   const saveTitle = useAction(update)
   const toggle = useAction(update)
   const setDue = useAction(update)
+  const setVital = useAction(update)
+  const setLabels = useAction(update)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const editButtonRef = useRef<HTMLButtonElement>(null)
@@ -139,7 +142,7 @@ export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps)
     close()
   }
 
-  const error = saveTitle.error ?? toggle.error ?? setDue.error
+  const error = saveTitle.error ?? toggle.error ?? setDue.error ?? setVital.error ?? setLabels.error
 
   return (
     <div className="flex items-start gap-1 rounded-xl bg-gray-50 p-2 hover:bg-gray-100 md:gap-2">
@@ -204,6 +207,7 @@ export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps)
                 aria-label={`Edit "${task.title}"`}
                 className={`block w-full break-words rounded text-left hover:text-orange-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}
               >
+                {task.vital === 1 && <Star className="mr-1 inline h-4 w-4 -translate-y-px fill-amber-400 text-amber-500" aria-hidden="true" />}
                 {task.title}
               </button>
             )}
@@ -212,12 +216,29 @@ export function TaskItem({ task, onDelete, onSaved, today, now }: TaskItemProps)
         )}
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="text-xs text-gray-500">{now ? formatAdded(task.createdAt, now) : ''}</span>
+          <button
+            type="button"
+            aria-pressed={task.vital === 1}
+            aria-label={`Vital: "${task.title}"`}
+            onClick={() => setVital.fire(task.id, { vital: task.vital !== 1 })}
+            className={`inline-flex min-h-8 items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 ${task.vital === 1 ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+          >
+            <Star className={`h-3.5 w-3.5 ${task.vital === 1 ? 'fill-amber-400 text-amber-500' : ''}`} aria-hidden="true" />
+            {/* Icon-only on phones to keep rows short; the button keeps its full name. */}
+            <span className="hidden md:inline">Vital</span>
+          </button>
           <DueChooser
             value={task.dueDate}
             onChange={(dueDate) => {
               setDue.run(task.id, { dueDate }).then(saved => onSaved?.(saved), () => {})
             }}
             today={today}
+            subject={`"${task.title}"`}
+          />
+          <LabelChips ids={task.categoryIds} />
+          <LabelChooser
+            value={task.categoryIds}
+            onChange={categoryIds => setLabels.fire(task.id, { categoryIds })}
             subject={`"${task.title}"`}
           />
         </div>

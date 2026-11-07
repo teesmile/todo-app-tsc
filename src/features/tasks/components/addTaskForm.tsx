@@ -15,6 +15,10 @@ interface AddTaskFormProps {
   defaultDue?: string | null
   /** In the bottom sheet: Escape closes the sheet instead of just leaving the field. */
   autoFocus?: boolean
+  /** With the Vital filter on, new tasks are vital (Phase 7). */
+  defaultVital?: boolean
+  /** With a label filter on, new tasks get that label (Phase 7). */
+  defaultLabel?: string | null
   /** `draftLeft` is true when more was typed while the add was in flight. */
   onAdded?: (task: Task, info: { draftLeft: boolean }) => void
 }
@@ -27,7 +31,7 @@ interface AddTaskFormProps {
  * the save was in flight is kept, and a failed save keeps the draft and says
  * why.
  */
-export function AddTaskForm({ titleRef, today, defaultDue = null, autoFocus = false, onAdded }: AddTaskFormProps) {
+export function AddTaskForm({ titleRef, today, defaultDue = null, defaultVital = false, defaultLabel = null, autoFocus = false, onAdded }: AddTaskFormProps) {
   const id = useId()
   const [title, setTitle] = useState('')
   // The latest typed title, readable after the add's await.
@@ -41,7 +45,7 @@ export function AddTaskForm({ titleRef, today, defaultDue = null, autoFocus = fa
     event.preventDefault()
     const submitted = { title, chosenDue }
     try {
-      const task = await addTask.run({ title, dueDate })
+      const task = await addTask.run({ title, dueDate, vital: defaultVital, categoryIds: defaultLabel ? [defaultLabel] : [] })
       // Clear only what was submitted: text typed while the add was in
       // flight is the next task, not something to throw away.
       const draftLeft = titleNow.current !== submitted.title

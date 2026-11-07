@@ -74,7 +74,7 @@ describe('filters and search', () => {
   it('is a radio group in a labelled fieldset', async () => {
     await renderList()
     const group = screen.getByRole('group', { name: 'Show' })
-    expect(within(group).getAllByRole('radio').map(r => r.getAttribute('value'))).toEqual(['all', 'active', 'done', 'today', 'overdue'])
+    expect(within(group).getAllByRole('radio').map(r => r.getAttribute('value'))).toEqual(['all', 'active', 'vital', 'done', 'today', 'overdue'])
   })
 
   it('writes a filter change to the URL straight away, without adding history', async () => {

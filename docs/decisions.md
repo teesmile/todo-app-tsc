@@ -28,6 +28,27 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Phase 7: Vital and labels, schema version 2, and the phases renumbered
+Decided by: Anthony. Bring back the old dashboard's dead "Vital Task" and "Task Categories" links as real features, as a phase of their own after the layout.
+Claim: a Vital flag (a filter, and first within its date group) and user-made labels (name plus one of eight colours, many per task, a label filter). Dexie schema version 2. The accounts and sync phases now cover both.
+Verdict: SHIPPED
+Because:
+- **Renumbering.** The new phase took number 7, so the old 7–11 became 8–12 in `docs/plan.md` and in code comments. Entries below this one keep the numbers they were written with: their "Phase 8" (accounts) is now Phase 9, "Phase 9" (sync) is now 10, "Phase 10" (offline) is now 11, and "Phase 11" (README) is now 12.
+- **Vital ordering.** Vital-first is a tiebreak inside the date groups, not a second sort, so "when" stays the one mental model; Done ignores it.
+- **Labels** are many-to-many with a fixed palette, so chips stay readable.
+- **Filter defaults.** The Vital filter and a label filter set those on new tasks, the same rule as Today, so a new task never vanishes.
+- **Deleting a label** asks first, says how many tasks use it, and removes it from them in one transaction.
+- **The migration** only adds defaults (`vital: 0`, `categoryIds: []`) and runs inside the version-change transaction. Its test opens a real version-1 database and checks every row and field; it fails if the upgrade step is removed.
+- **No server-side unique constraint on label names**, because two devices could create "Work" offline. Duplicates are merged in the UI instead (Phase 10).
+
+Caught on the way:
+- **The six-filter bar spilled out of the card at 360.** The whole-page overflow check couldn't see it, because the page itself didn't scroll. On phones the filters are now a 3×2 grid, and the layout check also measures anything escaping the task card.
+- **Rows grew tall.** The Vital and Label toggles are icon-only on phones, keeping their full accessible names.
+- **One test was timing out only under full-suite load**, so the suite-wide `asyncUtilTimeout` is now 3s.
+
+Checked: 184 tests, stable over 3 runs. Layout at 360, 390 and 768 with labels seeded on rows: no overflow, overlap, clipping or card escape. Smoke checks 15/15 and 11/11, and the legacy import passes. First Load JS 216.3 KB gzip (+3.7).
+Study: Dexie `version().upgrade()` and the version-change transaction (search "Dexie upgrade function transaction").
+
 ## 2026-11-07 — Codex review 6 (Phases 4–6, the first since the usage limit)
 Codex challenged: (1) an untouched inline editor overwrites another tab's edit on blur; (2) the bottom sheet closes after an add and discards text typed while it saved; (3) a task moving group (midnight, another tab) unmounts its editor and loses the draft; (4) another tab's boot-time purge deletes a tombstone that a paused Undo still points at, so Undo silently does nothing.
 Verdict: AGREE on all four; DISAGREE only with cross-tab undo-token coordination as the fix for 4

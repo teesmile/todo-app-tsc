@@ -17,7 +17,7 @@ export interface Profile {
 
 /**
  * A guest's first name, kept on this device in the tasks database's meta
- * store. When accounts arrive (Phase 8), a signed-in user's name comes from
+ * store. When accounts arrive (Phase 9), a signed-in user's name comes from
  * the account instead.
  */
 export function useProfile(): Profile | undefined {

@@ -34,8 +34,9 @@ export function groupKeyFor(task: Task, today: string, tomorrow = nextDay(today)
   return 'upcoming'
 }
 
+// Vital first (Phase 7), then due date, then newest first.
 function byDueThenNewest(a: Task, b: Task) {
-  return (a.dueDate ?? '').localeCompare(b.dueDate ?? '') || b.createdAt - a.createdAt || a.id.localeCompare(b.id)
+  return b.vital - a.vital || (a.dueDate ?? '').localeCompare(b.dueDate ?? '') || b.createdAt - a.createdAt || a.id.localeCompare(b.id)
 }
 
 function byMostRecentlyDone(a: Task, b: Task) {
@@ -45,7 +46,8 @@ function byMostRecentlyDone(a: Task, b: Task) {
 /**
  * Splits live tasks into the six groups (decision 4), always in the same
  * order, including empty ones. Completed tasks always go to Done, even if
- * overdue. Inside a group: due date first, then newest first, so a task you
+ * overdue. Inside a date group: Vital first (Phase 7), then due date, then
+ * newest first; Done is untouched by Vital. So a task you
  * just added shows at the top of its group. Done is most recently completed
  * first. Pure: `today` is passed in, so midnight and month ends are testable
  * without a fake clock.
