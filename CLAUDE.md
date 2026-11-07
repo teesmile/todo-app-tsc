@@ -21,6 +21,7 @@ A local-first task app. Next.js App Router (static export), React 19, Tailwind 4
 - Every interactive element is a native control (`button`, `input`, `dialog`, `a`) or carries the full ARIA pattern for its role. An icon-only button has an accessible name.
 - Every animation has a `prefers-reduced-motion` path.
 - No placeholder routes, dead buttons or empty files. If it isn't built, it isn't in the tree.
+- No attribution lines: commit messages never end with a `Co-Authored-By` line, and pull request descriptions never end with a "Generated with Claude Code" line.
 
 ## Phase routine
 At the end of every phase in `docs/plan.md`, after its **Verified by** checks pass:
