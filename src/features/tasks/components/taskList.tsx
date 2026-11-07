@@ -5,25 +5,38 @@ import type { Task, UndoToken } from '../store/types'
 import type { Toast } from './undoToast'
 import { Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useListParams } from '../hooks/useListParams'
+import { useShortcuts } from '../hooks/useShortcuts'
 import { useToday } from '../hooks/useToday'
 import { saveErrorMessage } from '../lib/errors'
+import { FILTER_LABELS, filterTasks } from '../lib/filter'
 import { focusAfterRemoving } from '../lib/focus'
 import { groupTasks } from '../lib/group'
 import { useTasks } from '../store/hooks'
 import { clearSamples, purgeGuestTombstones, remove, undoRemove } from '../store/repository'
 import { AddTaskForm } from './addTaskForm'
 import { TaskGroup } from './taskGroup'
+import { TaskToolbar } from './taskToolbar'
 import { UndoToast } from './undoToast'
 
 /** The task list: the add form, the six date groups and the undo toast. */
 export function TaskList() {
   const tasks = useTasks()
   const today = useToday()
-  const groups = useMemo(() => (tasks ? groupTasks(tasks, today).filter(g => g.tasks.length > 0) : undefined), [tasks, today])
+  const { filter, setFilter, query, setQuery } = useListParams()
+  // Filtering is a pure pass over tasks already in memory: instant, no debounce.
+  const shown = useMemo(() => (tasks ? filterTasks(tasks, { filter, query }, today) : undefined), [tasks, filter, query, today])
+  const groups = useMemo(() => (shown ? groupTasks(shown, today).filter(g => g.tasks.length > 0) : undefined), [shown, today])
   const hasSamples = tasks?.some(task => task.isSample === 1) ?? false
 
   const listRef = useRef<HTMLDivElement>(null)
   const addRef = useRef<HTMLInputElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  useShortcuts({
+    'n': () => addRef.current?.focus(),
+    '/': () => searchRef.current?.focus(),
+  })
   const [toast, setToast] = useState<Toast | null>(null)
   // Where focus goes next. A ref plus a request counter, so the effect below
   // only reads and clears it and never sets state itself.
@@ -116,6 +129,15 @@ export function TaskList() {
     <div ref={listRef} className="space-y-6">
       <AddTaskForm titleRef={addRef} />
 
+      <TaskToolbar
+        query={query}
+        onQueryChange={setQuery}
+        filter={filter}
+        onFilterChange={setFilter}
+        shown={shown?.length}
+        searchRef={searchRef}
+      />
+
       {Boolean(error) && (
         <p role="alert" className="text-sm text-red-600">{saveErrorMessage(error)}</p>
       )}
@@ -128,7 +150,15 @@ export function TaskList() {
             </div>
           )
         : groups.length === 0
-          ? <p className="py-8 text-center text-gray-500">No tasks yet. Add your first one above.</p>
+          ? (
+              <p className="py-8 text-center text-gray-500">
+                {tasks?.length === 0
+                  ? 'No tasks yet. Add your first one above.'
+                  : query.trim()
+                    ? `No ${filter === 'all' ? '' : `${FILTER_LABELS[filter].toLowerCase()} `}tasks match "${query.trim()}".`
+                    : `No ${FILTER_LABELS[filter].toLowerCase()} tasks.`}
+              </p>
+            )
           : groups.map(group => <TaskGroup key={group.key} group={group} onDelete={handleDelete} />)}
 
       {hasSamples && (

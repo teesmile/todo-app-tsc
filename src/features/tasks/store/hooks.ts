@@ -4,6 +4,7 @@ import type { TaskStats } from './stats'
 import type { OwnerId, Task } from './types'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useToday } from '../hooks/useToday'
 import { runLegacyImport } from './legacyImport'
 import { listTasks } from './repository'
 import { computeStats } from './stats'
@@ -87,5 +88,6 @@ export function useLegacyImport(): LegacyImportStatus {
 /** Stats over every live task for the owner; `undefined` while loading. */
 export function useStats(ownerId: OwnerId = GUEST): TaskStats | undefined {
   const tasks = useTasks(ownerId)
-  return useMemo(() => (tasks ? computeStats(tasks) : undefined), [tasks])
+  const today = useToday()
+  return useMemo(() => (tasks ? computeStats(tasks, today) : undefined), [tasks, today])
 }

@@ -5,7 +5,7 @@ import { Suspense } from 'react'
 import { TaskList } from '@/features/tasks/components/taskList'
 import { retryLegacyImport, useLegacyImport, useStats } from '@/features/tasks/store/hooks'
 
-const noTasks: TaskStats = { total: 0, completed: 0, active: 0, completedPercentage: 0, activePercentage: 0, recentlyCompleted: [] }
+const noTasks: TaskStats = { total: 0, completed: 0, active: 0, overdue: 0, dueToday: 0, completedPercentage: 0, activePercentage: 0, recentlyCompleted: [] }
 
 export default function Home() {
   // Stats over every task (audit 1.4); zeros until the first read lands.
@@ -82,7 +82,12 @@ export default function Home() {
                           {/* Completed Circle */}
                           <div className="text-center">
                             <div className="w-16 h-16 mx-auto mb-2 relative">
-                              <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 100 100">
+                              <svg
+                                className="w-16 h-16 transform -rotate-90"
+                                viewBox="0 0 100 100"
+                                role="img"
+                                aria-label={`${stats.completedPercentage}% completed: ${stats.completed} of ${stats.total} tasks done`}
+                              >
                                 {/* Background circle */}
                                 <circle
                                   cx="50"
@@ -105,7 +110,7 @@ export default function Home() {
                                   className="transition-all duration-1000 ease-in-out"
                                 />
                               </svg>
-                              <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
                                 <span className="text-lg font-bold text-green-500">
                                   {stats.completedPercentage}
                                   %
@@ -120,7 +125,12 @@ export default function Home() {
                           {/* In Progress Circle */}
                           <div className="text-center">
                             <div className="w-16 h-16 mx-auto mb-2 relative">
-                              <svg className="w-16 h-16 transform -rotate-90" viewBox="0 0 100 100">
+                              <svg
+                                className="w-16 h-16 transform -rotate-90"
+                                viewBox="0 0 100 100"
+                                role="img"
+                                aria-label={`${stats.activePercentage}% in progress: ${stats.active} of ${stats.total} tasks open`}
+                              >
                                 {/* Background circle */}
                                 <circle
                                   cx="50"
@@ -143,7 +153,7 @@ export default function Home() {
                                   className="transition-all duration-1000 ease-in-out"
                                 />
                               </svg>
-                              <div className="absolute inset-0 flex items-center justify-center">
+                              <div className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
                                 <span className="text-lg font-bold text-orange-500">
                                   {stats.activePercentage}
                                   %
@@ -156,6 +166,16 @@ export default function Home() {
                           </div>
                         </div>
                       )}
+                  <dl className="mt-4 grid grid-cols-2 gap-4 text-center text-sm">
+                    <div>
+                      <dt className="text-gray-600">Overdue</dt>
+                      <dd className={`text-lg font-bold ${stats.overdue > 0 ? 'text-red-600' : 'text-gray-900'}`}>{stats.overdue}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-600">Due today</dt>
+                      <dd className="text-lg font-bold text-gray-900">{stats.dueToday}</dd>
+                    </div>
+                  </dl>
                 </div>
 
                 {/* Completed Tasks - Dynamic */}
