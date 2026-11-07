@@ -7,8 +7,8 @@ export interface Toast {
   /** New for every toast, so a replaced toast restarts its timer. */
   id: string
   message: string
-  /** Present for a toast that can undo something. */
-  onUndo?: () => void
+  /** One optional button: Undo after a delete, Show all for a hidden task. */
+  action?: { label: string, run: () => void }
   durationMs?: number
 }
 
@@ -55,13 +55,13 @@ export function UndoToast({ toast, onClose }: { toast: Toast | null, onClose: ()
           className="pointer-events-auto flex items-center gap-4 rounded-xl bg-gray-900 px-4 py-3 text-sm text-white shadow-lg"
         >
           <span>{toast.message}</span>
-          {toast.onUndo && (
+          {toast.action && (
             <button
               type="button"
-              onClick={toast.onUndo}
+              onClick={toast.action.run}
               className="rounded px-2 py-1 font-semibold text-orange-300 hover:text-orange-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
             >
-              Undo
+              {toast.action.label}
             </button>
           )}
         </div>
