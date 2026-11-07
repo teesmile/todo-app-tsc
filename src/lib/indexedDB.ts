@@ -125,27 +125,6 @@ class TodoIndexedDB {
     });
   }
 
-  async syncFromAPI(apiTodos: any[]): Promise<void> {
-    await this.ensureConnection();
-    const transaction = this.db!.transaction(['todos'], 'readwrite');
-    const store = transaction.objectStore('todos');
-
-    // Save API todos as synced, non-local data
-    for (const apiTodo of apiTodos) {
-      const todoRecord: TodoRecord = {
-        id: apiTodo.id,
-        todo: apiTodo.todo,
-        completed: apiTodo.completed,
-        userId: apiTodo.userId,
-        isLocal: false,
-        isSynced: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      store.put(todoRecord);
-    }
-  }
-
   async getUnsyncedTodos(): Promise<TodoRecord[]> {
     await this.ensureConnection();
     return new Promise((resolve, reject) => {
