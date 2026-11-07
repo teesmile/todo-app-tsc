@@ -42,6 +42,7 @@ describe('privacy and terms', () => {
     expect(text()).toMatch(/choose “Delete account” and confirm/)
     // Honest about Phase 9: signing in doesn't sync tasks yet.
     expect(text()).toMatch(/Today, signing in doesn't copy your tasks anywhere/)
+    expect(screen.getByRole('link', { name: 'anthonyugwujac@gmail.com' })).toHaveAttribute('href', 'mailto:anthonyugwujac@gmail.com')
     expect(screen.getByRole('link', { name: /Back to your tasks/ })).toHaveAttribute('href', '/')
     expect(await violations()).toEqual([])
   })
@@ -52,6 +53,7 @@ describe('privacy and terms', () => {
     expect(screen.getByRole('link', { name: 'privacy page' })).toHaveAttribute('href', '/privacy')
     expect(text()).toMatch(/provided as it is, with no warranty/)
     expect(text()).toMatch(/The privacy page explains how/)
+    expect(screen.getByRole('link', { name: 'anthonyugwujac@gmail.com' })).toHaveAttribute('href', 'mailto:anthonyugwujac@gmail.com')
     expect(await violations()).toEqual([])
   })
 

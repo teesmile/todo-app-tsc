@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: 'The plain-language terms for using Todo App.',
 }
 
-const REPO_ISSUES = 'https://github.com/teesmile/todo-app-tsc/issues'
+const CONTACT_EMAIL = 'anthonyugwujac@gmail.com'
 
 export default function TermsPage() {
   return (
@@ -53,9 +53,9 @@ export default function TermsPage() {
 
       <h2>Questions</h2>
       <p>
-        Open an issue on
+        Email
         {' '}
-        <a href={REPO_ISSUES}>the app&apos;s GitHub page</a>
+        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
         .
       </p>
     </LegalPage>

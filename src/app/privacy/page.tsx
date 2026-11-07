@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: 'What Todo App keeps on your device, what it stores when you sign in, and how to delete it.',
 }
 
-const REPO_ISSUES = 'https://github.com/teesmile/todo-app-tsc/issues'
+const CONTACT_EMAIL = 'anthonyugwujac@gmail.com'
 
 export default function PrivacyPage() {
   return (
@@ -96,9 +96,9 @@ export default function PrivacyPage() {
 
       <h2>Questions</h2>
       <p>
-        You can ask what&apos;s held about you, or ask for it to be corrected or deleted, by opening an issue on
+        You can ask what&apos;s held about you, or ask for it to be corrected or deleted, by emailing
         {' '}
-        <a href={REPO_ISSUES}>the app&apos;s GitHub page</a>
+        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
         . If this page changes, the date at the top changes with it.
       </p>
     </LegalPage>
