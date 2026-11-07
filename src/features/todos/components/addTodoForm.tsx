@@ -1,41 +1,42 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { useAddTodo } from '../hooks/useTodos';
+import { useState } from 'react'
+import { useAddTodo } from '../hooks/useTodos'
 
 interface AddTodoFormProps {
-  onSuccess?: () => void;
-  onCancel?: () => void;
+  onSuccess?: () => void
+  onCancel?: () => void
 }
 
-export const AddTodoForm = ({ onSuccess, onCancel }: AddTodoFormProps) => {
-  const [todo, setTodo] = useState('');
-  const [completed, setCompleted] = useState(false);
-  
-  const addTodoMutation = useAddTodo();
+export function AddTodoForm({ onSuccess, onCancel }: AddTodoFormProps) {
+  const [todo, setTodo] = useState('')
+  const [completed, setCompleted] = useState(false)
+
+  const addTodoMutation = useAddTodo()
 
   const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!todo.trim()) return;
-    
+    e.preventDefault()
+    if (!todo.trim())
+      return
+
     addTodoMutation.mutate({
       todo: todo.trim(),
       completed,
       userId: 1,
     }, {
       onSuccess: () => {
-        setTodo('');
-        setCompleted(false);
-        onSuccess?.();
-      }
-    });
-  };
+        setTodo('')
+        setCompleted(false)
+        onSuccess?.()
+      },
+    })
+  }
 
   const handleCancel = () => {
-    setTodo('');
-    setCompleted(false);
-    onCancel?.();
-  };
+    setTodo('')
+    setCompleted(false)
+    onCancel?.()
+  }
 
   return (
     <form onSubmit={handleSubmit} className="p-6">
@@ -45,7 +46,7 @@ export const AddTodoForm = ({ onSuccess, onCancel }: AddTodoFormProps) => {
         </label>
         <textarea
           value={todo}
-          onChange={(e) => setTodo(e.target.value)}
+          onChange={e => setTodo(e.target.value)}
           className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
           rows={3}
           placeholder="Enter your todo description..."
@@ -53,13 +54,13 @@ export const AddTodoForm = ({ onSuccess, onCancel }: AddTodoFormProps) => {
           autoFocus
         />
       </div>
-      
+
       <div className="mb-6">
         <label className="flex items-center gap-3">
           <input
             type="checkbox"
             checked={completed}
-            onChange={(e) => setCompleted(e.target.checked)}
+            onChange={e => setCompleted(e.target.checked)}
             className="w-4 h-4 text-white bg-orange-500 border-none rounded focus:ring-orange-500 accent-orange-500"
           />
           <span className="text-sm text-gray-700">Mark as completed</span>
@@ -84,5 +85,5 @@ export const AddTodoForm = ({ onSuccess, onCancel }: AddTodoFormProps) => {
         </button>
       </div>
     </form>
-  );
-};
+  )
+}

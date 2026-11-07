@@ -1,7 +1,7 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react'
 
 interface LayoutProps {
-  children: ReactNode;
+  children: ReactNode
 }
 
 export default function TodoLayout({ children }: LayoutProps) {
@@ -9,5 +9,5 @@ export default function TodoLayout({ children }: LayoutProps) {
     <div>
       {children}
     </div>
-  );
+  )
 }

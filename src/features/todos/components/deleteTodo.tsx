@@ -1,27 +1,28 @@
-'use client';
+'use client'
 
-import { Trash } from 'lucide-react';
-import { useState } from 'react';
-import { useDeleteTodo } from '../hooks/useTodos';
+import { Trash } from 'lucide-react'
+import { useState } from 'react'
+import { useDeleteTodo } from '../hooks/useTodos'
 
-type DeleteTodoProps = {
-  id: string;
-  onSuccess?: () => void;
-};
+interface DeleteTodoProps {
+  id: string
+  onSuccess?: () => void
+}
 
-export const DeleteTodo = ({ id, onSuccess }: DeleteTodoProps) => {
-  const [showConfirm, setShowConfirm] = useState(false);
-  const deleteTodoMutation = useDeleteTodo();
+export function DeleteTodo({ id, onSuccess }: DeleteTodoProps) {
+  const [showConfirm, setShowConfirm] = useState(false)
+  const deleteTodoMutation = useDeleteTodo()
 
   const handleDelete = async () => {
     try {
-      await deleteTodoMutation.mutateAsync(parseInt(id));
-      onSuccess?.();
-      setShowConfirm(false);
-    } catch (error) {
-      console.error('Failed to delete todo:', error);
+      await deleteTodoMutation.mutateAsync(Number.parseInt(id))
+      onSuccess?.()
+      setShowConfirm(false)
     }
-  };
+    catch (error) {
+      console.error('Failed to delete todo:', error)
+    }
+  }
 
   return (
     <>
@@ -43,7 +44,7 @@ export const DeleteTodo = ({ id, onSuccess }: DeleteTodoProps) => {
               <p className="text-gray-600 mb-6">
                 Are you sure you want to delete this todo? This action cannot be undone.
               </p>
-              
+
               <div className="flex gap-3 justify-center">
                 <button
                   onClick={() => setShowConfirm(false)}
@@ -64,5 +65,5 @@ export const DeleteTodo = ({ id, onSuccess }: DeleteTodoProps) => {
         </div>
       )}
     </>
-  );
-};
+  )
+}

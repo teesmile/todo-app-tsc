@@ -1,15 +1,15 @@
-"use client";
+'use client'
 
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'
 
 export default function Error({
   error,
   reset,
 }: {
-  error: Error & { digest?: string };
-  reset: () => void;
+  error: Error & { digest?: string }
+  reset: () => void
 }) {
-  const router = useRouter();
+  const router = useRouter()
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -32,5 +32,5 @@ export default function Error({
         </div>
       </div>
     </div>
-  );
+  )
 }

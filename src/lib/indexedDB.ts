@@ -1,85 +1,83 @@
 interface TodoRecord {
-  id: number;
-  todo: string;
-  completed: boolean;
-  userId: number;
-  isLocal: boolean;
-  isSynced: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-  deletedAt?: Date;
+  id: number
+  todo: string
+  completed: boolean
+  userId: number
+  isLocal: boolean
+  isSynced: boolean
+  createdAt: Date
+  updatedAt: Date
+  deletedAt?: Date
 }
 
 class TodoIndexedDB {
-  private dbName = 'TodoAppDB';
-  private version = 1;
-  private db: IDBDatabase | null = null;
+  private dbName = 'TodoAppDB'
+  private version = 1
+  private db: IDBDatabase | null = null
 
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.version);
+      const request = indexedDB.open(this.dbName, this.version)
 
-      request.onerror = () => reject(request.error);
+      request.onerror = () => reject(request.error)
       request.onsuccess = () => {
-        this.db = request.result;
-        resolve();
-      };
+        this.db = request.result
+        resolve()
+      }
 
       request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        
+        const db = (event.target as IDBOpenDBRequest).result
+
         if (!db.objectStoreNames.contains('todos')) {
-          const store = db.createObjectStore('todos', { keyPath: 'id' });
-          store.createIndex('isLocal', 'isLocal', { unique: false });
-          store.createIndex('isSynced', 'isSynced', { unique: false });
-          store.createIndex('userId', 'userId', { unique: false });
+          const store = db.createObjectStore('todos', { keyPath: 'id' })
+          store.createIndex('isLocal', 'isLocal', { unique: false })
+          store.createIndex('isSynced', 'isSynced', { unique: false })
+          store.createIndex('userId', 'userId', { unique: false })
         }
-      };
-    });
+      }
+    })
   }
 
-  
-
-   private async ensureConnection() {
+  private async ensureConnection() {
     if (!this.db) {
-      await this.init();
+      await this.init()
     }
   }
 
   async getAllTodos(): Promise<TodoRecord[]> {
-    await this.ensureConnection();
+    await this.ensureConnection()
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['todos'], 'readonly');
-      const store = transaction.objectStore('todos');
-      const request = store.getAll();
+      const transaction = this.db!.transaction(['todos'], 'readonly')
+      const store = transaction.objectStore('todos')
+      const request = store.getAll()
 
       request.onsuccess = () => {
-        const todos = request.result.filter(todo => !todo.deletedAt);
-        resolve(todos);
-      };
-      request.onerror = () => reject(request.error);
-    });
+        const todos = request.result.filter(todo => !todo.deletedAt)
+        resolve(todos)
+      }
+      request.onerror = () => reject(request.error)
+    })
   }
 
   async getTodo(id: number): Promise<TodoRecord | null> {
-    await this.ensureConnection();
+    await this.ensureConnection()
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['todos'], 'readonly');
-      const store = transaction.objectStore('todos');
-      const request = store.get(id);
+      const transaction = this.db!.transaction(['todos'], 'readonly')
+      const store = transaction.objectStore('todos')
+      const request = store.get(id)
 
       request.onsuccess = () => {
-        const todo = request.result;
-        resolve(todo && !todo.deletedAt ? todo : null);
-      };
-      request.onerror = () => reject(request.error);
-    });
+        const todo = request.result
+        resolve(todo && !todo.deletedAt ? todo : null)
+      }
+      request.onerror = () => reject(request.error)
+    })
   }
 
   async saveTodo(todo: Partial<TodoRecord>): Promise<TodoRecord> {
-    await this.ensureConnection();
-    const now = new Date();
-    
+    await this.ensureConnection()
+    const now = new Date()
+
     const todoRecord: TodoRecord = {
       id: todo.id || Date.now(), // Generate ID if not provided
       todo: todo.todo || '',
@@ -89,58 +87,59 @@ class TodoIndexedDB {
       isSynced: todo.isSynced ?? false,
       createdAt: todo.createdAt || now,
       updatedAt: now,
-    };
+    }
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['todos'], 'readwrite');
-      const store = transaction.objectStore('todos');
-      const request = store.put(todoRecord);
+      const transaction = this.db!.transaction(['todos'], 'readwrite')
+      const store = transaction.objectStore('todos')
+      const request = store.put(todoRecord)
 
-      request.onsuccess = () => resolve(todoRecord);
-      request.onerror = () => reject(request.error);
-    });
+      request.onsuccess = () => resolve(todoRecord)
+      request.onerror = () => reject(request.error)
+    })
   }
 
   async deleteTodo(id: number): Promise<void> {
-    await this.ensureConnection();
+    await this.ensureConnection()
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['todos'], 'readwrite');
-      const store = transaction.objectStore('todos');
-      
+      const transaction = this.db!.transaction(['todos'], 'readwrite')
+      const store = transaction.objectStore('todos')
+
       // Soft delete - mark as deleted instead of removing
-      const getRequest = store.get(id);
+      const getRequest = store.get(id)
       getRequest.onsuccess = () => {
-        const todo = getRequest.result;
+        const todo = getRequest.result
         if (todo) {
-          todo.deletedAt = new Date();
-          todo.updatedAt = new Date();
-          const putRequest = store.put(todo);
-          putRequest.onsuccess = () => resolve();
-          putRequest.onerror = () => reject(putRequest.error);
-        } else {
-          resolve();
+          todo.deletedAt = new Date()
+          todo.updatedAt = new Date()
+          const putRequest = store.put(todo)
+          putRequest.onsuccess = () => resolve()
+          putRequest.onerror = () => reject(putRequest.error)
         }
-      };
-      getRequest.onerror = () => reject(getRequest.error);
-    });
+        else {
+          resolve()
+        }
+      }
+      getRequest.onerror = () => reject(getRequest.error)
+    })
   }
 
   async getUnsyncedTodos(): Promise<TodoRecord[]> {
-    await this.ensureConnection();
+    await this.ensureConnection()
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction(['todos'], 'readonly');
-      const store = transaction.objectStore('todos');
-      const index = store.index('isSynced');
-      const request = index.getAll(IDBKeyRange.only(false));
+      const transaction = this.db!.transaction(['todos'], 'readonly')
+      const store = transaction.objectStore('todos')
+      const index = store.index('isSynced')
+      const request = index.getAll(IDBKeyRange.only(false))
 
       request.onsuccess = () => {
-        const unsynced = request.result.filter(todo => !todo.deletedAt);
-        resolve(unsynced);
-      };
-      request.onerror = () => reject(request.error);
-    });
+        const unsynced = request.result.filter(todo => !todo.deletedAt)
+        resolve(unsynced)
+      }
+      request.onerror = () => reject(request.error)
+    })
   }
 }
 
-export const todoIndexedDB = new TodoIndexedDB();
-export type { TodoRecord };
+export const todoIndexedDB = new TodoIndexedDB()
+export type { TodoRecord }
