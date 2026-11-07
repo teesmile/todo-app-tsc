@@ -78,7 +78,9 @@ export function DueChooser({ value, onChange, today, subject, disabled }: DueCho
         disabled={disabled}
         aria-expanded={open}
         aria-controls={panelId}
-        aria-label={`Due date for ${subject}: ${value ? label.replace(/^Due /, '') : 'none'}`}
+        // Starts with the visible words (WCAG 2.5.3), so "click Due today"
+        // works by voice: "Due today, due date for …" or "Due date for …: none".
+        aria-label={value ? `${label}, due date for ${subject}` : `Due date for ${subject}: none`}
         onClick={() => {
           setPicking(false)
           setOpen(o => !o)

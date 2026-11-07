@@ -67,7 +67,7 @@ describe('(b) Escape and shortcuts inside the date picker and the inline editor'
 
   it('keeps shortcuts out of the date picker', async () => {
     const user = await renderList()
-    await user.click(screen.getByRole('button', { name: /^Due date for "Water the plants"/ }))
+    await user.click(screen.getByRole('button', { name: /due date for "Water the plants"/i }))
     await user.click(screen.getByRole('button', { name: 'Pick a date…' }))
     const date = screen.getByLabelText('Pick a date')
     await user.keyboard('n/')
@@ -79,7 +79,7 @@ describe('(b) Escape and shortcuts inside the date picker and the inline editor'
     const user = await renderList()
     await user.click(screen.getByRole('button', { name: 'Add a task' }))
     const sheet = screen.getByRole('dialog', { name: 'Add a task' })
-    await user.click(within(sheet).getByRole('button', { name: /^Due date for the new task/ }))
+    await user.click(within(sheet).getByRole('button', { name: /due date for the new task/i }))
     expect(within(sheet).getByRole('button', { name: 'Tomorrow' })).toBeInTheDocument()
 
     await user.keyboard('{Escape}')

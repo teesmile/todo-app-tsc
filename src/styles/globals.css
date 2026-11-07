@@ -141,3 +141,12 @@
     opacity: 0;
   }
 }
+
+/* A focus ring for anything that doesn't draw its own (Phase 8). Elements
+   with their own focus-visible ring set outline: none, so they keep theirs. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-orange-500);
+    outline-offset: 2px;
+  }
+}

@@ -82,7 +82,7 @@ describe('taskItem', () => {
 
   it('sets the due date from a small Due chip: Today, Tomorrow, or none', async () => {
     const { task, user } = await renderItem()
-    const chip = () => screen.getByRole('button', { name: /^Due date for "Buy oat milk"/ })
+    const chip = () => screen.getByRole('button', { name: /due date for "Buy oat milk"/i })
     expect(chip()).toHaveAccessibleName('Due date for "Buy oat milk": none')
     expect(screen.queryByDisplayValue(today)).not.toBeInTheDocument()
 
@@ -94,7 +94,7 @@ describe('taskItem', () => {
 
   it('picks any date from the chip with a native date input', async () => {
     const { task, user } = await renderItem()
-    await user.click(screen.getByRole('button', { name: /^Due date for/ }))
+    await user.click(screen.getByRole('button', { name: /due date for/i }))
     await user.click(screen.getByRole('button', { name: 'Pick a date…' }))
     const date = screen.getByLabelText('Pick a date')
     expect(date).toHaveAttribute('type', 'date')
@@ -105,7 +105,7 @@ describe('taskItem', () => {
 
   it('clears a due date, and closes the chooser on Escape with focus back on the chip', async () => {
     const { task, user } = await renderItem({ dueDate: today })
-    const chip = screen.getByRole('button', { name: /^Due date for/ })
+    const chip = screen.getByRole('button', { name: /due date for/i })
     expect(chip).toHaveTextContent('Due today')
 
     await user.click(chip)

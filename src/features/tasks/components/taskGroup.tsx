@@ -10,6 +10,7 @@ interface TaskGroupProps {
   onDelete: (task: Task) => void
   /** After a title or due-date edit saves. */
   onSaved?: (task: Task) => void
+  onToggled?: (task: Task) => void
   today: string
   now: Date | null
 }
@@ -18,12 +19,12 @@ interface TaskGroupProps {
  * One group (Overdue, Today, ...) as a labelled section with a list. The
  * heading takes programmatic focus when the last of its tasks is deleted.
  */
-export function TaskGroup({ group, onDelete, onSaved, today, now }: TaskGroupProps) {
+export function TaskGroup({ group, onDelete, onSaved, onToggled, today, now }: TaskGroupProps) {
   const headingId = useId()
   const tone = group.key === 'overdue' ? 'text-red-700' : 'text-gray-700'
 
   return (
-    <section aria-labelledby={headingId}>
+    <section aria-labelledby={headingId} data-group={group.key}>
       <h3
         id={headingId}
         tabIndex={-1}
@@ -32,7 +33,7 @@ export function TaskGroup({ group, onDelete, onSaved, today, now }: TaskGroupPro
       >
         {group.label}
         {' '}
-        <span className="font-normal text-gray-400">
+        <span className="font-normal text-gray-500">
           (
           {group.tasks.length}
           )
@@ -41,7 +42,7 @@ export function TaskGroup({ group, onDelete, onSaved, today, now }: TaskGroupPro
       <ul className="space-y-2">
         {group.tasks.map(task => (
           <li key={task.id}>
-            <TaskItem task={task} onDelete={onDelete} onSaved={onSaved} today={today} now={now} />
+            <TaskItem task={task} onDelete={onDelete} onSaved={onSaved} onToggled={onToggled} today={today} now={now} />
           </li>
         ))}
       </ul>

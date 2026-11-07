@@ -1,7 +1,9 @@
 import type { GroupKey, TaskGroup } from './group'
 
 export type FocusTarget
-  = | { kind: 'row', id: string }
+  // `group`: wait until the row is in this group, e.g. Done after completing,
+  // rather than focusing its old row a moment before it unmounts.
+  = | { kind: 'row', id: string, group?: GroupKey }
     | { kind: 'heading', group: GroupKey }
     | { kind: 'add' }
 
@@ -10,10 +12,12 @@ export type FocusTarget
  * falls back to the top of the page:
  * - the next task in the same group;
  * - else that group's heading, if the group still has tasks;
- * - else the add field, because the group is about to disappear.
+ * - else the next group's heading (or the previous one), so focus stays in
+ *   the list, where Ctrl+Z can still undo;
+ * - else the add field, when no tasks are left at all.
  */
 export function focusAfterRemoving(groups: TaskGroup[], id: string): FocusTarget {
-  for (const group of groups) {
+  for (const [g, group] of groups.entries()) {
     const index = group.tasks.findIndex(task => task.id === id)
     if (index === -1)
       continue
@@ -22,7 +26,8 @@ export function focusAfterRemoving(groups: TaskGroup[], id: string): FocusTarget
       return { kind: 'row', id: next.id }
     if (group.tasks.length > 1)
       return { kind: 'heading', group: group.key }
-    return { kind: 'add' }
+    const neighbour = groups[g + 1] ?? groups[g - 1]
+    return neighbour ? { kind: 'heading', group: neighbour.key } : { kind: 'add' }
   }
   return { kind: 'add' }
 }

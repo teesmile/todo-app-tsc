@@ -7,12 +7,12 @@ import { Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useListParams } from '../hooks/useListParams'
 import { useNow } from '../hooks/useNow'
-import { useShortcuts } from '../hooks/useShortcuts'
+import { isTypingTarget, useShortcuts } from '../hooks/useShortcuts'
 import { useToday } from '../hooks/useToday'
 import { saveErrorMessage } from '../lib/errors'
 import { FILTER_LABELS, filterTasks } from '../lib/filter'
 import { focusAfterRemoving } from '../lib/focus'
-import { groupTasks } from '../lib/group'
+import { groupKeyFor, groupTasks } from '../lib/group'
 import { useCategories, useTasks } from '../store/hooks'
 import { clearSamples, purgeGuestTombstones, remove, undoRemove } from '../store/repository'
 import { AddTaskForm } from './addTaskForm'
@@ -23,6 +23,9 @@ import { LabelsContext } from './labelsContext'
 import { TaskGroup } from './taskGroup'
 import { TaskToolbar } from './taskToolbar'
 import { UndoToast } from './undoToast'
+
+/** Ctrl+Z, or ⌘Z on a Mac, undoes while the toast offers Undo (WCAG 2.2.1). */
+const UNDO_KEYS = { keyshortcuts: 'Control+Z Meta+Z', hint: 'Ctrl+Z' }
 
 /**
  * The task list: the add form (inline from tablet width, a bottom sheet on
@@ -83,6 +86,30 @@ export function TaskList() {
   const [error, setError] = useState<unknown>(null)
   const closeToast = useCallback(() => setToast(null), [])
 
+  // The Undo button sits at the end of the list, which can be dozens of Tab
+  // presses away within a six-second window, so Undo also has a key. Inside a
+  // text field, Ctrl+Z stays the field's own undo.
+  const toastRef = useRef(toast)
+  useEffect(() => {
+    toastRef.current = toast
+  }, [toast])
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const action = toastRef.current?.action
+      if (!action?.keyshortcuts || event.key.toLowerCase() !== 'z' || !(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey)
+        return
+      // In a text field that has text, Ctrl+Z is the field's own undo. An
+      // empty one has nothing to undo, so the app's Undo takes it.
+      const target = event.target as HTMLInputElement | null
+      if (isTypingTarget(target) && (target?.value ?? '') !== '')
+        return
+      event.preventDefault()
+      action.run()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   // Guest tombstones only exist for undo; once their window has passed,
   // nothing will ever need them. Once per page load.
   useEffect(() => {
@@ -101,7 +128,7 @@ export function TaskList() {
     else if (target.kind === 'heading')
       element = listRef.current?.querySelector<HTMLElement>(`[data-group-heading="${target.group}"]`)
     else
-      element = listRef.current?.querySelector<HTMLElement>(`[data-task-id="${target.id}"]`)
+      element = listRef.current?.querySelector<HTMLElement>(`${target.group ? `section[data-group="${target.group}"] ` : ''}[data-task-id="${target.id}"]`)
     if (element) {
       element.focus()
       pendingFocus.current = null
@@ -138,7 +165,7 @@ export function TaskList() {
       if (token) {
         requestFocus(target)
         const what = `"${task.title}"`
-        setToast({ id: crypto.randomUUID(), message: `Deleted ${what}`, action: { label: 'Undo', run: () => undo([token], what) } })
+        setToast({ id: crypto.randomUUID(), message: `Deleted ${what}`, action: { label: 'Undo', run: () => undo([token], what), ...UNDO_KEYS } })
       }
     }
     catch (err) {
@@ -172,6 +199,17 @@ export function TaskList() {
     return true
   }
 
+  /**
+   * After completing or reopening: the row moves between groups, which
+   * unmounts it, so put focus back on the same task in its new place (or on
+   * the next one, if the current view now hides it), and say what happened.
+   */
+  function handleToggled(task: Task) {
+    const visible = filterTasks([task], { filter, query, label }, today).length > 0
+    requestFocus(visible || !groups ? { kind: 'row', id: task.id, group: groupKeyFor(task, today) } : focusAfterRemoving(groups, task.id))
+    setToast({ id: crypto.randomUUID(), message: `${task.completed ? 'Completed' : 'Reopened'} "${task.title}"`, durationMs: 3000 })
+  }
+
   async function handleClearSamples() {
     try {
       setError(null)
@@ -179,7 +217,7 @@ export function TaskList() {
       if (tokens.length) {
         requestFocus({ kind: 'add' })
         const what = `${tokens.length} sample task${tokens.length === 1 ? '' : 's'}`
-        setToast({ id: crypto.randomUUID(), message: `Cleared ${what}`, action: { label: 'Undo', run: () => undo(tokens, what) } })
+        setToast({ id: crypto.randomUUID(), message: `Cleared ${what}`, action: { label: 'Undo', run: () => undo(tokens, what), ...UNDO_KEYS } })
       }
     }
     catch (err) {
@@ -230,7 +268,7 @@ export function TaskList() {
                         : `No ${FILTER_LABELS[filter].toLowerCase()} tasks.`}
                   </p>
                 )
-              : groups.map(group => <TaskGroup key={group.key} group={group} onDelete={handleDelete} onSaved={task => reportIfHidden(task, 'Saved')} today={today} now={now} />)}
+              : groups.map(group => <TaskGroup key={group.key} group={group} onDelete={handleDelete} onSaved={task => reportIfHidden(task, 'Saved')} onToggled={handleToggled} today={today} now={now} />)}
 
           {hasSamples && (
             <div className="border-t border-gray-100 pt-4">
