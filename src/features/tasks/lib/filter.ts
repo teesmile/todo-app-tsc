@@ -1,11 +1,12 @@
 import type { Task } from '../store/types'
 
-export const FILTERS = ['all', 'active', 'done', 'today', 'overdue'] as const
+export const FILTERS = ['all', 'active', 'vital', 'done', 'today', 'overdue'] as const
 export type TaskFilter = (typeof FILTERS)[number]
 
 export const FILTER_LABELS: Record<TaskFilter, string> = {
   all: 'All',
   active: 'Active',
+  vital: 'Vital',
   done: 'Done',
   today: 'Today',
   overdue: 'Overdue',
@@ -30,12 +31,19 @@ export function normalizeText(value: string): string {
   return out.toLowerCase()
 }
 
-/** `tasks` narrowed to the filter and the search. Today and Overdue mean open tasks only. */
-export function filterTasks(tasks: Task[], { filter = 'all', query = '' }: { filter?: TaskFilter, query?: string }, today: string): Task[] {
+/**
+ * `tasks` narrowed to the filter, the label and the search. Today and Overdue
+ * mean open tasks only. `label` is a label id; null means every label.
+ */
+export function filterTasks(tasks: Task[], { filter = 'all', query = '', label = null }: { filter?: TaskFilter, query?: string, label?: string | null }, today: string): Task[] {
   // Every word must appear, in any order.
   const terms = normalizeText(query).split(/\s+/).filter(Boolean)
   return tasks.filter((task) => {
     if (filter === 'active' && task.completed)
+      return false
+    if (filter === 'vital' && task.vital !== 1)
+      return false
+    if (label !== null && !task.categoryIds.includes(label))
       return false
     if (filter === 'done' && !task.completed)
       return false

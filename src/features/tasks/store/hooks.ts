@@ -1,12 +1,12 @@
 'use client'
 
 import type { TaskStats } from './stats'
-import type { OwnerId, Task } from './types'
+import type { Category, OwnerId, Task } from './types'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useToday } from '../hooks/useToday'
 import { runLegacyImport } from './legacyImport'
-import { listTasks } from './repository'
+import { listCategories, listTasks } from './repository'
 import { computeStats } from './stats'
 import { GUEST } from './types'
 
@@ -18,6 +18,11 @@ import { GUEST } from './types'
  */
 export function useTasks(ownerId: OwnerId = GUEST): Task[] | undefined {
   return useLiveQuery(() => listTasks({ ownerId }), [ownerId])
+}
+
+/** Live labels, by name; `undefined` while loading. */
+export function useCategories(ownerId: OwnerId = GUEST): Category[] | undefined {
+  return useLiveQuery(() => listCategories({ ownerId }), [ownerId])
 }
 
 export type LegacyImportStatus = 'running' | 'blocked' | 'done' | 'failed'

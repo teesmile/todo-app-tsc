@@ -1,10 +1,14 @@
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import Dexie from 'dexie'
 import { afterEach, vi } from 'vitest'
 import { resetDbForTests, TASKS_DB_NAME } from '@/features/tasks/store/db'
 import { LEGACY_DB_NAME } from '@/features/tasks/store/legacyImport'
 import { screenSize } from '@/test/screen'
 import '@testing-library/jest-dom/vitest'
+
+// IndexedDB work (live queries, regrouping) can take more than the default
+// one second for waitFor/findBy when the whole suite runs in parallel.
+configure({ asyncUtilTimeout: 3000 })
 
 // Outside a Next app router, useSearchParams returns null. Read the real
 // window.location instead, so a test can set ?filter=overdue and "reload".

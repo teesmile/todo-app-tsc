@@ -92,6 +92,8 @@ export function mapLegacyRow(row: LegacyTodo, installId: string, now = Date.now(
     updatedAt,
     completedAt: row.completed ? updatedAt : null,
     deletedAt: null,
+    vital: 0,
+    categoryIds: [],
   }
 }
 

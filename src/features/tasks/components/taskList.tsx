@@ -13,11 +13,13 @@ import { saveErrorMessage } from '../lib/errors'
 import { FILTER_LABELS, filterTasks } from '../lib/filter'
 import { focusAfterRemoving } from '../lib/focus'
 import { groupTasks } from '../lib/group'
-import { useTasks } from '../store/hooks'
+import { useCategories, useTasks } from '../store/hooks'
 import { clearSamples, purgeGuestTombstones, remove, undoRemove } from '../store/repository'
 import { AddTaskForm } from './addTaskForm'
 import { AddTaskSheet } from './addTaskSheet'
 import { EditDrafts, EditDraftsContext } from './editDrafts'
+import { LabelManager } from './labelManager'
+import { LabelsContext } from './labelsContext'
 import { TaskGroup } from './taskGroup'
 import { TaskToolbar } from './taskToolbar'
 import { UndoToast } from './undoToast'
@@ -30,9 +32,12 @@ export function TaskList() {
   const tasks = useTasks()
   const today = useToday()
   const now = useNow()
-  const { filter, setFilter, query, setQuery } = useListParams()
+  const categories = useCategories()
+  const { filter, setFilter, query, setQuery, label: labelParam, setLabel } = useListParams()
+  // A label filter pointing at a label that no longer exists means every label.
+  const label = labelParam && categories?.some(c => c.id === labelParam) ? labelParam : null
   // Filtering is a pure pass over tasks already in memory: instant, no debounce.
-  const shown = useMemo(() => (tasks ? filterTasks(tasks, { filter, query }, today) : undefined), [tasks, filter, query, today])
+  const shown = useMemo(() => (tasks ? filterTasks(tasks, { filter, query, label }, today) : undefined), [tasks, filter, query, label, today])
   const groups = useMemo(() => (shown ? groupTasks(shown, today).filter(g => g.tasks.length > 0) : undefined), [shown, today])
   const hasSamples = tasks?.some(task => task.isSample === 1) ?? false
 
@@ -43,6 +48,20 @@ export function TaskList() {
   const searchRef = useRef<HTMLInputElement>(null)
 
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [managerOpen, setManagerOpen] = useState(false)
+  const labels = useMemo(() => ({ categories: categories ?? [], openManager: () => setManagerOpen(true) }), [categories])
+  // How many live tasks use each label, for the manager's delete confirmation.
+  const uses = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const task of tasks ?? []) {
+      for (const id of task.categoryIds)
+        counts.set(id, (counts.get(id) ?? 0) + 1)
+    }
+    return counts
+  }, [tasks])
+  // With the Vital filter or a label filter on, a new task gets that flag or
+  // label too, so it never vanishes from the view it was added in.
+  const defaultVital = filter === 'vital'
   // While the Today filter is on, a new task is due today, or it would vanish
   // from the view it was added in. The add form's Due chip shows this.
   const defaultDue = filter === 'today' ? today : null
@@ -133,7 +152,7 @@ export function TaskList() {
    * (Found by the Phase 5 hand checks.) Returns whether it was hidden.
    */
   function reportIfHidden(task: Task, verb: 'Added' | 'Saved'): boolean {
-    if (filterTasks([task], { filter, query }, today).length > 0)
+    if (filterTasks([task], { filter, query, label }, today).length > 0)
       return false
     setToast({
       id: crypto.randomUUID(),
@@ -143,6 +162,7 @@ export function TaskList() {
         run: () => {
           // Query first: setFilter writes the URL with the latest query.
           setQuery('')
+          setLabel(null)
           setFilter('all')
           setToast(null)
           requestFocus({ kind: 'row', id: task.id })
@@ -169,68 +189,77 @@ export function TaskList() {
 
   return (
     <EditDraftsContext value={drafts}>
-      <div ref={listRef} className="space-y-5">
-        {/* Inline from tablet width; on phones the floating button opens the sheet. */}
-        <div className="hidden md:block">
-          <AddTaskForm titleRef={addRef} today={today} defaultDue={defaultDue} onAdded={task => reportIfHidden(task, 'Added')} />
-        </div>
-
-        <TaskToolbar
-          query={query}
-          onQueryChange={setQuery}
-          filter={filter}
-          onFilterChange={setFilter}
-          shown={shown?.length}
-          searchRef={searchRef}
-        />
-
-        {Boolean(error) && (
-          <p role="alert" className="text-sm text-red-600">{saveErrorMessage(error)}</p>
-        )}
-
-        {groups === undefined
-          ? (
-              <div role="status" className="flex items-center justify-center py-12">
-                <Loader2 className="h-10 w-10 animate-spin text-orange-500 motion-reduce:animate-none" aria-hidden="true" />
-                <span className="sr-only">Loading tasks</span>
-              </div>
-            )
-          : groups.length === 0
-            ? (
-                <p className="py-8 text-center text-gray-500">
-                  {tasks?.length === 0
-                    ? 'No tasks yet. Add your first one.'
-                    : query.trim()
-                      ? `No ${filter === 'all' ? '' : `${FILTER_LABELS[filter].toLowerCase()} `}tasks match "${query.trim()}".`
-                      : `No ${FILTER_LABELS[filter].toLowerCase()} tasks.`}
-                </p>
-              )
-            : groups.map(group => <TaskGroup key={group.key} group={group} onDelete={handleDelete} onSaved={task => reportIfHidden(task, 'Saved')} today={today} now={now} />)}
-
-        {hasSamples && (
-          <div className="border-t border-gray-100 pt-4">
-            <button
-              type="button"
-              onClick={handleClearSamples}
-              className="text-sm text-gray-600 underline underline-offset-4 hover:text-gray-900"
-            >
-              Clear sample tasks
-            </button>
+      <LabelsContext value={labels}>
+        <div ref={listRef} className="space-y-5">
+          {/* Inline from tablet width; on phones the floating button opens the sheet. */}
+          <div className="hidden md:block">
+            <AddTaskForm titleRef={addRef} today={today} defaultDue={defaultDue} defaultVital={defaultVital} defaultLabel={label} onAdded={task => reportIfHidden(task, 'Added')} />
           </div>
-        )}
 
-        <AddTaskSheet
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          today={today}
-          defaultDue={defaultDue}
-          onAdded={(task) => {
-            if (!reportIfHidden(task, 'Added'))
-              setToast({ id: crypto.randomUUID(), message: `Added "${task.title}"`, durationMs: 3000 })
-          }}
-        />
-        <UndoToast toast={toast} onClose={closeToast} />
-      </div>
+          <TaskToolbar
+            query={query}
+            onQueryChange={setQuery}
+            filter={filter}
+            onFilterChange={setFilter}
+            shown={shown?.length}
+            searchRef={searchRef}
+            categories={categories ?? []}
+            label={label}
+            onLabelChange={setLabel}
+            onManageLabels={() => setManagerOpen(true)}
+          />
+
+          {Boolean(error) && (
+            <p role="alert" className="text-sm text-red-600">{saveErrorMessage(error)}</p>
+          )}
+
+          {groups === undefined
+            ? (
+                <div role="status" className="flex items-center justify-center py-12">
+                  <Loader2 className="h-10 w-10 animate-spin text-orange-500 motion-reduce:animate-none" aria-hidden="true" />
+                  <span className="sr-only">Loading tasks</span>
+                </div>
+              )
+            : groups.length === 0
+              ? (
+                  <p className="py-8 text-center text-gray-500">
+                    {tasks?.length === 0
+                      ? 'No tasks yet. Add your first one.'
+                      : query.trim()
+                        ? `No ${filter === 'all' ? '' : `${FILTER_LABELS[filter].toLowerCase()} `}tasks match "${query.trim()}".`
+                        : `No ${FILTER_LABELS[filter].toLowerCase()} tasks.`}
+                  </p>
+                )
+              : groups.map(group => <TaskGroup key={group.key} group={group} onDelete={handleDelete} onSaved={task => reportIfHidden(task, 'Saved')} today={today} now={now} />)}
+
+          {hasSamples && (
+            <div className="border-t border-gray-100 pt-4">
+              <button
+                type="button"
+                onClick={handleClearSamples}
+                className="text-sm text-gray-600 underline underline-offset-4 hover:text-gray-900"
+              >
+                Clear sample tasks
+              </button>
+            </div>
+          )}
+
+          <AddTaskSheet
+            open={sheetOpen}
+            onOpenChange={setSheetOpen}
+            today={today}
+            defaultDue={defaultDue}
+            defaultVital={defaultVital}
+            defaultLabel={label}
+            onAdded={(task) => {
+              if (!reportIfHidden(task, 'Added'))
+                setToast({ id: crypto.randomUUID(), message: `Added "${task.title}"`, durationMs: 3000 })
+            }}
+          />
+          <LabelManager open={managerOpen} onClose={() => setManagerOpen(false)} categories={categories ?? []} uses={uses} />
+          <UndoToast toast={toast} onClose={closeToast} />
+        </div>
+      </LabelsContext>
     </EditDraftsContext>
   )
 }

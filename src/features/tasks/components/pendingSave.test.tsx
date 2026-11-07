@@ -33,6 +33,8 @@ const task = {
   updatedAt: 0,
   completedAt: null,
   deletedAt: null,
+  vital: 0 as const,
+  categoryIds: [] as string[],
 }
 
 describe('typing while a save is in flight', () => {
@@ -78,7 +80,7 @@ describe('typing while a save is in flight', () => {
 
     const field = screen.getByLabelText('New task')
     await user.type(field, 'Call the bank{Enter}')
-    expect(add).toHaveBeenCalledWith({ title: 'Call the bank', dueDate: null })
+    expect(add).toHaveBeenCalledWith({ title: 'Call the bank', dueDate: null, vital: false, categoryIds: [] })
 
     await user.type(field, ' about the card')
     await act(async () => save.resolve())

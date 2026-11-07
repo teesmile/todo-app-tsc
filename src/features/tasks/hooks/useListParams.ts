@@ -7,8 +7,12 @@ import { isTaskFilter } from '../lib/filter'
 
 const URL_DEBOUNCE_MS = 300
 
-function writeUrl(filter: TaskFilter, query: string) {
+function writeUrl(filter: TaskFilter, query: string, label: string | null) {
   const url = new URL(window.location.href)
+  if (label)
+    url.searchParams.set('label', label)
+  else
+    url.searchParams.delete('label')
   if (filter === 'all')
     url.searchParams.delete('filter')
   else
@@ -34,7 +38,8 @@ export function useListParams() {
     return isTaskFilter(fromUrl) ? fromUrl : 'all'
   })
   const [query, setQueryState] = useState(() => params.get('q') ?? '')
-  const latest = useRef({ filter, query })
+  const [label, setLabelState] = useState<string | null>(() => params.get('label') || null)
+  const latest = useRef({ filter, query, label })
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => () => clearTimeout(timer.current), [])
@@ -43,15 +48,22 @@ export function useListParams() {
     latest.current.filter = next
     setFilterState(next)
     clearTimeout(timer.current)
-    writeUrl(next, latest.current.query)
+    writeUrl(next, latest.current.query, latest.current.label)
+  }, [])
+
+  const setLabel = useCallback((next: string | null) => {
+    latest.current.label = next
+    setLabelState(next)
+    clearTimeout(timer.current)
+    writeUrl(latest.current.filter, latest.current.query, next)
   }, [])
 
   const setQuery = useCallback((next: string) => {
     latest.current.query = next
     setQueryState(next)
     clearTimeout(timer.current)
-    timer.current = setTimeout(() => writeUrl(latest.current.filter, latest.current.query), URL_DEBOUNCE_MS)
+    timer.current = setTimeout(() => writeUrl(latest.current.filter, latest.current.query, latest.current.label), URL_DEBOUNCE_MS)
   }, [])
 
-  return { filter, setFilter, query, setQuery }
+  return { filter, setFilter, query, setQuery, label, setLabel }
 }

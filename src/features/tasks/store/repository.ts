@@ -1,5 +1,5 @@
 import type { TasksDB } from './db'
-import type { OwnerId, Task, UndoToken } from './types'
+import type { Category, CategoryColor, OwnerId, Task, UndoToken } from './types'
 import { getDb } from './db'
 import { GUEST } from './types'
 
@@ -56,6 +56,8 @@ export interface NewTask {
   title: string
   completed?: boolean
   dueDate?: string | null
+  vital?: boolean
+  categoryIds?: string[]
 }
 
 export async function add(input: NewTask, { db = getDb(), ownerId = GUEST }: { db?: TasksDB, ownerId?: OwnerId } = {}): Promise<Task> {
@@ -74,6 +76,8 @@ export async function add(input: NewTask, { db = getDb(), ownerId = GUEST }: { d
     updatedAt: now,
     completedAt: completed ? now : null,
     deletedAt: null,
+    vital: input.vital ? 1 : 0,
+    categoryIds: [...new Set(input.categoryIds ?? [])],
   }
   await db.tasks.add(task)
   return task
@@ -83,6 +87,8 @@ export interface TaskPatch {
   title?: string
   completed?: boolean
   dueDate?: string | null
+  vital?: boolean
+  categoryIds?: string[]
 }
 
 /**
@@ -117,6 +123,10 @@ export async function update(id: string, patch: TaskPatch, { db = getDb(), expec
       next.completed = patch.completed
       next.completedAt = patch.completed ? now : null
     }
+    if (patch.vital !== undefined)
+      next.vital = patch.vital ? 1 : 0
+    if (patch.categoryIds !== undefined)
+      next.categoryIds = [...new Set(patch.categoryIds)]
 
     await db.tasks.put(next)
     return next
@@ -125,7 +135,7 @@ export async function update(id: string, patch: TaskPatch, { db = getDb(), expec
 
 /**
  * Tombstones a task: sets `deletedAt` and keeps the row, so the delete can be
- * undone and, from Phase 9, synced. Returns a one-shot undo token, or null if
+ * undone and, from Phase 10, synced. Returns a one-shot undo token, or null if
  * the task was already deleted or never existed.
  */
 export async function remove(id: string, { db = getDb() }: { db?: TasksDB } = {}): Promise<UndoToken | null> {
@@ -193,7 +203,7 @@ export const TOMBSTONE_RETENTION_MS = 24 * 60 * 60 * 1000
  * Hard-deletes guest tombstones older than TOMBSTONE_RETENTION_MS. A guest's
  * tombstone is only kept for undo, because nothing will ever sync it. A
  * signed-in user's tombstones are left alone: sync needs them so a delete
- * doesn't come back from another device (Phase 9). Returns how many went.
+ * doesn't come back from another device (Phase 10). Returns how many went.
  */
 export async function purgeGuestTombstones({ db = getDb(), now = Date.now() }: { db?: TasksDB, now?: number } = {}): Promise<number> {
   return db.transaction('rw', db.tasks, async () => {
@@ -220,4 +230,89 @@ export async function listTasks({ db = getDb(), ownerId = GUEST }: { db?: TasksD
 /** Newest first, ties broken by id so the order is stable across renders. */
 export function sortNewestFirst(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => b.createdAt - a.createdAt || a.id.localeCompare(b.id))
+}
+
+// Labels (Phase 7) -----------------------------------------------------------
+
+export const MAX_CATEGORY_NAME_LENGTH = 40
+
+export class CategoryNameError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CategoryNameError'
+  }
+}
+
+async function liveCategories(db: TasksDB, ownerId: OwnerId): Promise<Category[]> {
+  return db.categories.where('ownerId').equals(ownerId).filter(c => c.deletedAt === null).toArray()
+}
+
+/** Trimmed, 1–40 characters, and not already used by another live label (ignoring case). */
+async function cleanCategoryName(db: TasksDB, ownerId: OwnerId, name: string, exceptId?: string): Promise<string> {
+  const trimmed = name.trim()
+  if (!trimmed)
+    throw new CategoryNameError('A label needs a name.')
+  if (trimmed.length > MAX_CATEGORY_NAME_LENGTH)
+    throw new CategoryNameError(`A label name can be at most ${MAX_CATEGORY_NAME_LENGTH} characters.`)
+  const clash = (await liveCategories(db, ownerId)).find(c => c.id !== exceptId && c.name.toLowerCase() === trimmed.toLowerCase())
+  if (clash)
+    throw new CategoryNameError(`There's already a label called "${clash.name}".`)
+  return trimmed
+}
+
+export async function createCategory(input: { name: string, color: CategoryColor }, { db = getDb(), ownerId = GUEST }: { db?: TasksDB, ownerId?: OwnerId } = {}): Promise<Category> {
+  return db.transaction('rw', db.categories, async () => {
+    const now = Date.now()
+    const category: Category = {
+      id: crypto.randomUUID(),
+      ownerId,
+      name: await cleanCategoryName(db, ownerId, input.name),
+      color: input.color,
+      dirty: 1,
+      rev: 1,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    }
+    await db.categories.add(category)
+    return category
+  })
+}
+
+export async function updateCategory(id: string, patch: { name?: string, color?: CategoryColor }, { db = getDb() }: { db?: TasksDB } = {}): Promise<Category> {
+  return db.transaction('rw', db.categories, async () => {
+    const current = await db.categories.get(id)
+    if (!current || current.deletedAt !== null)
+      throw new CategoryNameError('That label no longer exists.')
+    const next: Category = { ...current, updatedAt: Date.now(), dirty: 1, rev: current.rev + 1 }
+    if (patch.name !== undefined)
+      next.name = await cleanCategoryName(db, current.ownerId, patch.name, id)
+    if (patch.color !== undefined)
+      next.color = patch.color
+    await db.categories.put(next)
+    return next
+  })
+}
+
+/**
+ * Tombstones a label and takes it off every task that has it, in one
+ * transaction, so no task is left pointing at it. Returns how many tasks
+ * changed.
+ */
+export async function removeCategory(id: string, { db = getDb() }: { db?: TasksDB } = {}): Promise<number> {
+  return db.transaction('rw', db.categories, db.tasks, async () => {
+    const current = await db.categories.get(id)
+    if (!current || current.deletedAt !== null)
+      return 0
+    const now = Date.now()
+    await db.categories.put({ ...current, deletedAt: now, updatedAt: now, dirty: 1, rev: current.rev + 1 })
+    const tasks = await db.tasks.where('categoryIds').equals(id).toArray()
+    await db.tasks.bulkPut(tasks.map(task => ({ ...task, categoryIds: task.categoryIds.filter(c => c !== id), updatedAt: now, dirty: 1, rev: task.rev + 1 })))
+    return tasks.filter(t => t.deletedAt === null).length
+  })
+}
+
+/** Live labels for `ownerId`, by name. */
+export async function listCategories({ db = getDb(), ownerId = GUEST }: { db?: TasksDB, ownerId?: OwnerId } = {}): Promise<Category[]> {
+  return (await liveCategories(db, ownerId)).sort((a, b) => a.name.localeCompare(b.name))
 }
