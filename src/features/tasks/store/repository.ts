@@ -208,14 +208,23 @@ export const TOMBSTONE_RETENTION_MS = 24 * 60 * 60 * 1000
  * doesn't come back from another device (Phase 10). Returns how many went.
  */
 export async function purgeGuestTombstones({ db = getDb(), now = Date.now() }: { db?: TasksDB, now?: number } = {}): Promise<number> {
+  const expired = (task: Task) => task.deletedAt !== null && task.deletedAt < now - TOMBSTONE_RETENTION_MS
+  // Read first, and write only if there's something to purge. This runs on
+  // every page load, and IndexedDB makes a read of `tasks` wait for any
+  // unfinished write to it: an unconditional write held the list's first
+  // read behind a disk commit, and in a virtual-time capture that commit
+  // never lands, so the list stayed on its spinner.
+  if (!await db.tasks.where('ownerId').equals(GUEST).filter(expired).first())
+    return 0
   return db.transaction('rw', db.tasks, async () => {
-    const expired = await db.tasks
+    // Checked again inside the write: an undo since the read must win.
+    const expiredIds = await db.tasks
       .where('ownerId')
       .equals(GUEST)
-      .filter(task => task.deletedAt !== null && task.deletedAt < now - TOMBSTONE_RETENTION_MS)
+      .filter(expired)
       .primaryKeys()
-    await db.tasks.bulkDelete(expired)
-    return expired.length
+    await db.tasks.bulkDelete(expiredIds)
+    return expiredIds.length
   })
 }
 
