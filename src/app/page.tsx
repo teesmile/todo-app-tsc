@@ -2,9 +2,8 @@
 
 import type { TaskStats } from '@/features/tasks/store/stats'
 import { Suspense } from 'react'
+import { TaskList } from '@/features/tasks/components/taskList'
 import { retryLegacyImport, useLegacyImport, useStats } from '@/features/tasks/store/hooks'
-import { CreateTodo } from '@/features/todos/components/createTodo'
-import { TodoList } from '@/features/todos/components/todoList'
 
 const noTasks: TaskStats = { total: 0, completed: 0, active: 0, completedPercentage: 0, activePercentage: 0, recentlyCompleted: [] }
 
@@ -57,13 +56,10 @@ export default function Home() {
               <div className="col-span-8">
                 <div className="bg-white rounded-2xl shadow-sm border">
                   <div className="p-6 border-b border-gray-100">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-lg font-semibold text-gray-900">To-Do</h2>
-                      <CreateTodo />
-                    </div>
+                    <h2 className="text-lg font-semibold text-gray-900">To-Do</h2>
                   </div>
                   <div className="p-6">
-                    <TodoList />
+                    <TaskList />
                   </div>
                 </div>
               </div>
