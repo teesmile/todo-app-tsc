@@ -28,6 +28,17 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Phase 4's Codex review skipped (usage limit); its two leads checked by hand
+Decided by: Anthony, because Codex hit its usage limit before finishing (the first run returned no structured findings; the second returned "You've hit your usage limit… try again at 10:28 AM").
+Claim: instead of waiting, investigate the two areas Codex's partial run named, test-first: (1) can a retried legacy import bring back a task deleted after the first import, and (2) can a save that finishes overwrite newer typing?
+Verdict: both were real bugs; both fixed. The next review runs against `main`, so it covers Phase 4's code too.
+Because:
+- **(1) Yes, through Phase 4's tombstone purge.** If the source marker failed to land, then on a later load the purge hard-deleted a deleted import's tombstone, and the insert-only retry re-added it. Insert-only only skips rows that still exist. Fix: the authoritative marker is now in the destination's `meta` store, written in the same transaction as the inserts, so a re-run stops before touching the old database. The source marker is just a hint.
+- **(2) Yes, in both forms.** Text typed while a save was in flight was dropped when the inline editor closed, or when the add form cleared. Fix: the editor compares the latest draft (from a ref, not a stale closure) with what it submitted, and stays open with the newer text, or saves it at once if focus already left. The add form clears a field only if it still holds what was submitted.
+
+Checked: 4 new tests (one import, three pending-save), each confirmed failing with its fix reverted and passing with it. 73 tests pass, stable over 3 runs. The 15-step smoke check and the browser legacy import also pass.
+Study: "stale closures in async React handlers", and why idempotency markers belong in the same transaction as the work they mark.
+
 ## 2026-11-07 — Phase 4: grouped list, delete with undo, and where focus goes
 Decided by: Claude, building Phase 4 of the plan.
 Claim: tasks group into Overdue, Today, Tomorrow, Upcoming, No date and Done through a pure `groupTasks(tasks, today)`. Delete tombstones the task and shows one 6-second Undo toast. Focus is placed deliberately after every delete and undo.

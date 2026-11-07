@@ -3,7 +3,7 @@ import { validate as isUuid, version as uuidVersion } from 'uuid'
 import { describe, expect, it, vi } from 'vitest'
 import { getDb, getInstallId, TasksDB } from './db'
 import { LEGACY_DB_NAME, legacyTaskId, runLegacyImport } from './legacyImport'
-import { listTasks, MAX_TITLE_LENGTH, TitleError, update } from './repository'
+import { listTasks, MAX_TITLE_LENGTH, purgeGuestTombstones, remove, TitleError, UNDO_WINDOW_MS, update } from './repository'
 
 const DAY = 24 * 60 * 60 * 1000
 const t0 = new Date('2026-10-01T09:00:00Z')
@@ -98,15 +98,30 @@ describe('legacy import', () => {
     expect(await importedTitles()).toHaveLength(2)
   })
 
-  it('keeps an edit made after an interrupted import when the import re-runs', async () => {
+  it('stops a re-run even if the old database lost its marker, and keeps the edit', async () => {
     await seedLegacy()
     await runLegacyImport()
     const [mine] = (await listTasks()).filter(t => t.title === 'Mine, created locally')
     await update(mine.id, { title: 'Mine, edited after import' })
     await forgetImportedAt()
 
-    expect(await runLegacyImport()).toEqual({ status: 'imported', imported: 0, skipped: 2 })
+    expect(await runLegacyImport()).toEqual({ status: 'already-imported' })
     expect(await importedTitles()).toEqual(['Dummyjson row I completed', 'Mine, edited after import'])
+  })
+
+  it('never brings back a task deleted after the import, even once its tombstone is purged', async () => {
+    await seedLegacy()
+    await runLegacyImport()
+    const [mine] = (await listTasks()).filter(t => t.title === 'Mine, created locally')
+    await remove(mine.id)
+    // The undo window passes and the next page load purges the tombstone.
+    await purgeGuestTombstones({ now: Date.now() + UNDO_WINDOW_MS + 1 })
+    expect(await getDb().tasks.get(mine.id)).toBeUndefined()
+    // The first run's "done" marker in the old database never landed.
+    await forgetImportedAt()
+
+    await runLegacyImport()
+    expect(await importedTitles()).toEqual(['Dummyjson row I completed'])
   })
 
   it('creates no duplicates when two tabs import at the same time', async () => {
