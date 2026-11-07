@@ -22,10 +22,11 @@ describe('todoItem', () => {
     mutate.mockClear()
   })
 
-  it('renders the todo text as a link to its detail page', () => {
+  it('renders the todo text as plain text, with no link to the removed detail page', () => {
     render(<TodoItem todo={makeTodo()} showActions={false} />)
 
-    expect(screen.getByRole('link', { name: 'Buy oat milk' })).toHaveAttribute('href', '/todos/7')
+    expect(screen.getByText('Buy oat milk')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
 
   it('strikes through a completed todo and leaves an active one plain', () => {

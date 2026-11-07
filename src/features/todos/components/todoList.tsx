@@ -1,10 +1,10 @@
 'use client'
 
-import { Edit2, Eye, Loader2, Plus } from 'lucide-react'
-import Link from 'next/link'
+import { Edit2, Loader2 } from 'lucide-react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 import { useTodos } from '../hooks/useTodos'
+import { CreateTodo } from './createTodo'
 
 import { EditTodoForm } from './editTodoForm'
 // Import your modular components
@@ -86,10 +86,7 @@ export function TodoList() {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 mb-4">No todos found</p>
-        <button type="button" className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          <Plus className="w-4 h-4" />
-          Create your first todo
-        </button>
+        <CreateTodo />
       </div>
     )
   }
@@ -140,18 +137,11 @@ export function TodoList() {
                     <span>Priority: Moderate</span>
                     <span>
                       Status:
+                      {' '}
                       {todo.completed ? 'Completed' : 'Not Started'}
                     </span>
                     {/* Action Buttons */}
                     <span className="flex items-center gap-2">
-                      <Link
-                        href={`/todos/${todo.id}`}
-                        className="p-1 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded"
-                        title="View details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Link>
-
                       <button
                         type="button"
                         className="p-1 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded"

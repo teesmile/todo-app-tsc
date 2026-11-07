@@ -1,8 +1,7 @@
 'use client'
 
 import type { Todo } from '@/types/api'
-import { Check, Edit2, Eye, X } from 'lucide-react'
-import Link from 'next/link'
+import { Check, Edit2, X } from 'lucide-react'
 import { useState } from 'react'
 import { useUpdateTodo } from '../hooks/useTodos'
 
@@ -76,14 +75,9 @@ function TodoItem({ todo, showActions = true }: TodoItemProps) {
               />
             )
           : (
-              <Link
-                href={`/todos/${todo.id}`}
-                className="block hover:text-orange-600 transition-colors cursor-pointer"
-              >
-                <span className={`${todo.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-                  {todo.todo}
-                </span>
-              </Link>
+              <span className={`block ${todo.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                {todo.todo}
+              </span>
             )}
       </div>
 
@@ -114,13 +108,6 @@ function TodoItem({ todo, showActions = true }: TodoItemProps) {
               )
             : (
                 <>
-                  <Link
-                    href={`/todos/${todo.id}`}
-                    className="p-1 text-orange-600 hover:text-orange-700"
-                    title="View details"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </Link>
                   <button
                     type="button"
                     onClick={() => setIsEditing(true)}
