@@ -146,7 +146,7 @@ export async function remove(id: string, { db = getDb() }: { db?: TasksDB } = {}
 
     const now = Date.now()
     const rev = current.rev + 1
-    await db.tasks.put({ ...current, deletedAt: now, updatedAt: now, dirty: 1, rev })
+    await db.tasks.put({ ...current, deletedAt: now, deletedRev: rev, updatedAt: now, dirty: 1, rev })
     return { id, rev }
   })
 }
@@ -161,10 +161,12 @@ export async function remove(id: string, { db = getDb() }: { db?: TasksDB } = {}
 export async function undoRemove(token: UndoToken, { db = getDb() }: { db?: TasksDB } = {}): Promise<boolean> {
   return db.transaction('rw', db.tasks, async () => {
     const current = await db.tasks.get(token.id)
-    if (!current || current.deletedAt === null || current.rev !== token.rev)
+    // Matched on deletedRev, which only a delete sets, not on rev, which any
+    // later write to the tombstone bumps.
+    if (!current || current.deletedAt === null || current.deletedRev !== token.rev)
       return false
 
-    await db.tasks.put({ ...current, deletedAt: null, updatedAt: Date.now(), dirty: 1, rev: current.rev + 1 })
+    await db.tasks.put({ ...current, deletedAt: null, deletedRev: null, updatedAt: Date.now(), dirty: 1, rev: current.rev + 1 })
     return true
   })
 }
@@ -183,7 +185,7 @@ export async function clearSamples({ db = getDb(), ownerId = GUEST }: { db?: Tas
       .filter(task => task.ownerId === ownerId && task.deletedAt === null)
       .toArray()
     const now = Date.now()
-    await db.tasks.bulkPut(samples.map(task => ({ ...task, deletedAt: now, updatedAt: now, dirty: 1, rev: task.rev + 1 })))
+    await db.tasks.bulkPut(samples.map(task => ({ ...task, deletedAt: now, deletedRev: task.rev + 1, updatedAt: now, dirty: 1, rev: task.rev + 1 })))
     return samples.map(task => ({ id: task.id, rev: task.rev + 1 }))
   })
 }
@@ -236,6 +238,14 @@ export function sortNewestFirst(tasks: Task[]): Task[] {
 
 export const MAX_CATEGORY_NAME_LENGTH = 40
 
+/** The label was renamed since an edit of its name began, typically in another tab. */
+export class CategoryConflictError extends Error {
+  constructor(readonly currentName: string) {
+    super(`The label was renamed to "${currentName}" since editing began`)
+    this.name = 'CategoryConflictError'
+  }
+}
+
 export class CategoryNameError extends Error {
   constructor(message: string) {
     super(message)
@@ -279,11 +289,14 @@ export async function createCategory(input: { name: string, color: CategoryColor
   })
 }
 
-export async function updateCategory(id: string, patch: { name?: string, color?: CategoryColor }, { db = getDb() }: { db?: TasksDB } = {}): Promise<Category> {
+export async function updateCategory(id: string, patch: { name?: string, color?: CategoryColor }, { db = getDb(), expectName }: { db?: TasksDB, expectName?: string } = {}): Promise<Category> {
   return db.transaction('rw', db.categories, async () => {
     const current = await db.categories.get(id)
     if (!current || current.deletedAt !== null)
       throw new CategoryNameError('That label no longer exists.')
+    // Compare-and-set, as for task titles: never silently overwrite a newer name.
+    if (expectName !== undefined && current.name !== expectName)
+      throw new CategoryConflictError(current.name)
     const next: Category = { ...current, updatedAt: Date.now(), dirty: 1, rev: current.rev + 1 }
     if (patch.name !== undefined)
       next.name = await cleanCategoryName(db, current.ownerId, patch.name, id)
@@ -309,6 +322,32 @@ export async function removeCategory(id: string, { db = getDb() }: { db?: TasksD
     const tasks = await db.tasks.where('categoryIds').equals(id).toArray()
     await db.tasks.bulkPut(tasks.map(task => ({ ...task, categoryIds: task.categoryIds.filter(c => c !== id), updatedAt: now, dirty: 1, rev: task.rev + 1 })))
     return tasks.filter(t => t.deletedAt === null).length
+  })
+}
+
+/**
+ * Adds or removes one label on one task, against the stored list, inside one
+ * transaction. Replacing the whole list from what a tab rendered would drop a
+ * label another tab (or a quick second click) added meanwhile (review
+ * of Phase 7).
+ */
+export async function setTaskLabel(taskId: string, labelId: string, on: boolean, { db = getDb() }: { db?: TasksDB } = {}): Promise<Task> {
+  return db.transaction('rw', db.tasks, async () => {
+    const current = await db.tasks.get(taskId)
+    if (!current || current.deletedAt !== null)
+      throw new TaskNotFoundError(taskId)
+    const has = current.categoryIds.includes(labelId)
+    if (has === on)
+      return current
+    const next: Task = {
+      ...current,
+      categoryIds: on ? [...current.categoryIds, labelId] : current.categoryIds.filter(id => id !== labelId),
+      updatedAt: Date.now(),
+      dirty: 1,
+      rev: current.rev + 1,
+    }
+    await db.tasks.put(next)
+    return next
   })
 }
 

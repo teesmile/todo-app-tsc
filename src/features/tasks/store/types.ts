@@ -27,6 +27,12 @@ export interface Task {
   completedAt: number | null
   /** Set when deleted. A tombstone is never cleared except by its own undo. */
   deletedAt: number | null
+  /**
+   * The rev the delete produced, kept apart from `rev` so later writes to a
+   * tombstone (a label being deleted, sync bookkeeping) can't invalidate its
+   * Undo token (review of Phase 7). Absent on rows deleted before it.
+   */
+  deletedRev?: number | null
   /** 1 when flagged Vital (Phase 7): sorted first within its date group. */
   vital: 0 | 1
   /** Ids of the labels on this task (Phase 7). Unknown ids are ignored when shown. */
@@ -57,5 +63,6 @@ export interface MetaEntry {
 /** Returned by `remove()`. One-shot: it can only undo the delete it came from. */
 export interface UndoToken {
   id: string
+  /** The delete's generation: the row's `deletedRev`. */
   rev: number
 }

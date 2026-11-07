@@ -33,5 +33,8 @@ export function useAction<Args extends unknown[], Result>(action: (...args: Args
     run(...args).catch(() => {})
   }, [run])
 
-  return { run, fire, pending, error }
+  /** Clears a shown error, e.g. when the user backs out of a conflict. */
+  const reset = useCallback(() => setError(null), [])
+
+  return { run, fire, reset, pending, error }
 }
