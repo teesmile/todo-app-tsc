@@ -2,7 +2,7 @@
 
 import type { Ref } from 'react'
 import type { Task } from '../store/types'
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useAction } from '../hooks/useAction'
 import { saveErrorMessage } from '../lib/errors'
 import { add, MAX_TITLE_LENGTH } from '../store/repository'
@@ -19,8 +19,12 @@ interface AddTaskFormProps {
   defaultVital?: boolean
   /** With a label filter on, new tasks get that label (Phase 7). */
   defaultLabel?: string | null
-  /** `draftLeft` is true when more was typed while the add was in flight. */
-  onAdded?: (task: Task, info: { draftLeft: boolean }) => void
+  /**
+   * `draftLeft` is true when more was typed while the add was in flight.
+   * `formGone` is true when this form was unmounted before the add finished:
+   * its sheet opening is over, so it mustn't act on whatever is open now.
+   */
+  onAdded?: (task: Task, info: { draftLeft: boolean, formGone: boolean }) => void
 }
 
 /**
@@ -40,6 +44,13 @@ export function AddTaskForm({ titleRef, today, defaultDue = null, defaultVital =
   const [chosenDue, setChosenDue] = useState<string | null | undefined>(undefined)
   const dueDate = chosenDue === undefined ? defaultDue : chosenDue
   const addTask = useAction(add)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -53,7 +64,7 @@ export function AddTaskForm({ titleRef, today, defaultDue = null, defaultVital =
         titleNow.current = ''
       setTitle(current => (current === submitted.title ? '' : current))
       setChosenDue(current => (current === submitted.chosenDue ? undefined : current))
-      onAdded?.(task, { draftLeft })
+      onAdded?.(task, { draftLeft, formGone: !mounted.current })
     }
     catch {
       // Shown below; the draft stays.

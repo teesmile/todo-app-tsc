@@ -96,11 +96,13 @@ export function AddTaskSheet({ open, onOpenChange, today, defaultDue, defaultVit
             defaultVital={defaultVital}
             defaultLabel={defaultLabel}
             autoFocus
-            onAdded={(task, { draftLeft }) => {
+            onAdded={(task, { draftLeft, formGone }) => {
               // Text typed while the add was saving is the next task: keep the
               // sheet open for it rather than unmounting it (review of
-              // Phases 4-6).
-              if (!draftLeft)
+              // Phases 4-6). A form that's gone belonged to an earlier opening:
+              // closing now would close the new one and lose its draft (review
+              // 10). The add is still announced.
+              if (!draftLeft && !formGone)
                 onOpenChange(false)
               onAdded(task)
             }}
