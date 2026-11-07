@@ -43,6 +43,32 @@ describe('todoService concurrency', () => {
     expect(stored).toMatchObject({ todo: 'Book dentist for Friday', completed: true })
   })
 
+  it('rejects, and leaves the row unchanged, when the update transaction aborts after its write', async () => {
+    const { id } = await service.createTodo({ todo: 'Water the plants' })
+
+    // Abort the transaction right after put() succeeds. That's what a quota or
+    // commit failure looks like: no request error, only an abort and a rollback.
+    const { IDBObjectStore } = await import('fake-indexeddb')
+    const realPut = IDBObjectStore.prototype.put
+    const putSpy = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args: Parameters<IDBObjectStore['put']>) {
+      const request = realPut.apply(this, args)
+      request.addEventListener('success', () => this.transaction.abort())
+      return request
+    })
+
+    try {
+      const outcome = await Promise.race([
+        service.updateTodo({ id, todo: 'never committed' }).then(() => 'resolved', () => 'rejected'),
+        new Promise(resolve => setTimeout(resolve, 500, 'hung')),
+      ])
+      expect(outcome).toBe('rejected')
+    }
+    finally {
+      putSpy.mockRestore()
+    }
+    expect(await service.getTodo(id)).toMatchObject({ todo: 'Water the plants' })
+  })
+
   it('refuses to update a task that has already been deleted', async () => {
     const { id } = await service.createTodo({ todo: 'Return library book' })
     await service.deleteTodo(id)
