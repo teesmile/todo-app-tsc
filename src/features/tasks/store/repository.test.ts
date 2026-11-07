@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDb, resetDbForTests, TasksDB } from './db'
-import { add, clearSamples, listTasks, MAX_TITLE_LENGTH, purgeGuestTombstones, remove, TaskNotFoundError, TitleError, UNDO_WINDOW_MS, undoRemove, update } from './repository'
+import { add, clearSamples, listTasks, MAX_TITLE_LENGTH, purgeGuestTombstones, remove, TaskNotFoundError, TitleError, TOMBSTONE_RETENTION_MS, undoRemove, update } from './repository'
 
 // Reopening the database is what a page reload does: a new connection, the
 // same stored data.
@@ -139,7 +139,7 @@ describe('samples', () => {
 })
 
 describe('purging guest tombstones', () => {
-  it('removes guest tombstones past the undo window, and keeps recent ones and signed-in users\' ones', async () => {
+  it('removes guest tombstones past the retention period, and keeps recent ones and signed-in users\' ones', async () => {
     const t0 = new Date('2026-11-07T12:00:00Z').getTime()
     vi.useFakeTimers({ now: t0, toFake: ['Date'] })
     try {
@@ -148,11 +148,11 @@ describe('purging guest tombstones', () => {
       await remove(old.id)
       await remove(mine.id)
 
-      vi.setSystemTime(t0 + UNDO_WINDOW_MS)
+      vi.setSystemTime(t0 + TOMBSTONE_RETENTION_MS)
       const recent = await add({ title: 'Deleted just now' })
       await remove(recent.id)
 
-      expect(await purgeGuestTombstones({ now: t0 + UNDO_WINDOW_MS + 1 })).toBe(1)
+      expect(await purgeGuestTombstones({ now: t0 + TOMBSTONE_RETENTION_MS + 1 })).toBe(1)
       const db = getDb()
       expect(await db.tasks.get(old.id)).toBeUndefined()
       expect(await db.tasks.get(recent.id)).toBeDefined()
@@ -165,7 +165,7 @@ describe('purging guest tombstones', () => {
 
   it('never touches a live task', async () => {
     const live = await add({ title: 'Still here' })
-    expect(await purgeGuestTombstones({ now: Date.now() + UNDO_WINDOW_MS * 10 })).toBe(0)
+    expect(await purgeGuestTombstones({ now: Date.now() + TOMBSTONE_RETENTION_MS * 10 })).toBe(0)
     expect(await getDb().tasks.get(live.id)).toBeDefined()
   })
 })

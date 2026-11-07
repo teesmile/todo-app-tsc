@@ -17,6 +17,7 @@ import { useTasks } from '../store/hooks'
 import { clearSamples, purgeGuestTombstones, remove, undoRemove } from '../store/repository'
 import { AddTaskForm } from './addTaskForm'
 import { AddTaskSheet } from './addTaskSheet'
+import { EditDrafts, EditDraftsContext } from './editDrafts'
 import { TaskGroup } from './taskGroup'
 import { TaskToolbar } from './taskToolbar'
 import { UndoToast } from './undoToast'
@@ -35,6 +36,8 @@ export function TaskList() {
   const groups = useMemo(() => (shown ? groupTasks(shown, today).filter(g => g.tasks.length > 0) : undefined), [shown, today])
   const hasSamples = tasks?.some(task => task.isSample === 1) ?? false
 
+  // Open inline editors, by task id, so a row that changes group keeps its draft.
+  const [drafts] = useState(() => new EditDrafts())
   const listRef = useRef<HTMLDivElement>(null)
   const addRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -94,7 +97,9 @@ export function TaskList() {
         setToast({ id: crypto.randomUUID(), message: `Restored ${what}`, durationMs: 3000 })
       }
       else {
-        setToast(null)
+        // Already gone for good (another tab purged it): say so, rather than
+        // closing the toast as if it had worked.
+        setToast({ id: crypto.randomUUID(), message: `${what} couldn't be undone: it's already gone.`, durationMs: 4000 })
       }
     }
     catch (err) {
@@ -163,67 +168,69 @@ export function TaskList() {
   }
 
   return (
-    <div ref={listRef} className="space-y-5">
-      {/* Inline from tablet width; on phones the floating button opens the sheet. */}
-      <div className="hidden md:block">
-        <AddTaskForm titleRef={addRef} today={today} defaultDue={defaultDue} onAdded={task => reportIfHidden(task, 'Added')} />
-      </div>
-
-      <TaskToolbar
-        query={query}
-        onQueryChange={setQuery}
-        filter={filter}
-        onFilterChange={setFilter}
-        shown={shown?.length}
-        searchRef={searchRef}
-      />
-
-      {Boolean(error) && (
-        <p role="alert" className="text-sm text-red-600">{saveErrorMessage(error)}</p>
-      )}
-
-      {groups === undefined
-        ? (
-            <div role="status" className="flex items-center justify-center py-12">
-              <Loader2 className="h-10 w-10 animate-spin text-orange-500 motion-reduce:animate-none" aria-hidden="true" />
-              <span className="sr-only">Loading tasks</span>
-            </div>
-          )
-        : groups.length === 0
-          ? (
-              <p className="py-8 text-center text-gray-500">
-                {tasks?.length === 0
-                  ? 'No tasks yet. Add your first one.'
-                  : query.trim()
-                    ? `No ${filter === 'all' ? '' : `${FILTER_LABELS[filter].toLowerCase()} `}tasks match "${query.trim()}".`
-                    : `No ${FILTER_LABELS[filter].toLowerCase()} tasks.`}
-              </p>
-            )
-          : groups.map(group => <TaskGroup key={group.key} group={group} onDelete={handleDelete} onSaved={task => reportIfHidden(task, 'Saved')} today={today} now={now} />)}
-
-      {hasSamples && (
-        <div className="border-t border-gray-100 pt-4">
-          <button
-            type="button"
-            onClick={handleClearSamples}
-            className="text-sm text-gray-600 underline underline-offset-4 hover:text-gray-900"
-          >
-            Clear sample tasks
-          </button>
+    <EditDraftsContext value={drafts}>
+      <div ref={listRef} className="space-y-5">
+        {/* Inline from tablet width; on phones the floating button opens the sheet. */}
+        <div className="hidden md:block">
+          <AddTaskForm titleRef={addRef} today={today} defaultDue={defaultDue} onAdded={task => reportIfHidden(task, 'Added')} />
         </div>
-      )}
 
-      <AddTaskSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        today={today}
-        defaultDue={defaultDue}
-        onAdded={(task) => {
-          if (!reportIfHidden(task, 'Added'))
-            setToast({ id: crypto.randomUUID(), message: `Added "${task.title}"`, durationMs: 3000 })
-        }}
-      />
-      <UndoToast toast={toast} onClose={closeToast} />
-    </div>
+        <TaskToolbar
+          query={query}
+          onQueryChange={setQuery}
+          filter={filter}
+          onFilterChange={setFilter}
+          shown={shown?.length}
+          searchRef={searchRef}
+        />
+
+        {Boolean(error) && (
+          <p role="alert" className="text-sm text-red-600">{saveErrorMessage(error)}</p>
+        )}
+
+        {groups === undefined
+          ? (
+              <div role="status" className="flex items-center justify-center py-12">
+                <Loader2 className="h-10 w-10 animate-spin text-orange-500 motion-reduce:animate-none" aria-hidden="true" />
+                <span className="sr-only">Loading tasks</span>
+              </div>
+            )
+          : groups.length === 0
+            ? (
+                <p className="py-8 text-center text-gray-500">
+                  {tasks?.length === 0
+                    ? 'No tasks yet. Add your first one.'
+                    : query.trim()
+                      ? `No ${filter === 'all' ? '' : `${FILTER_LABELS[filter].toLowerCase()} `}tasks match "${query.trim()}".`
+                      : `No ${FILTER_LABELS[filter].toLowerCase()} tasks.`}
+                </p>
+              )
+            : groups.map(group => <TaskGroup key={group.key} group={group} onDelete={handleDelete} onSaved={task => reportIfHidden(task, 'Saved')} today={today} now={now} />)}
+
+        {hasSamples && (
+          <div className="border-t border-gray-100 pt-4">
+            <button
+              type="button"
+              onClick={handleClearSamples}
+              className="text-sm text-gray-600 underline underline-offset-4 hover:text-gray-900"
+            >
+              Clear sample tasks
+            </button>
+          </div>
+        )}
+
+        <AddTaskSheet
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
+          today={today}
+          defaultDue={defaultDue}
+          onAdded={(task) => {
+            if (!reportIfHidden(task, 'Added'))
+              setToast({ id: crypto.randomUUID(), message: `Added "${task.title}"`, durationMs: 3000 })
+          }}
+        />
+        <UndoToast toast={toast} onClose={closeToast} />
+      </div>
+    </EditDraftsContext>
   )
 }

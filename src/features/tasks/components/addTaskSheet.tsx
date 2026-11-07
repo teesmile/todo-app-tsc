@@ -92,8 +92,12 @@ export function AddTaskSheet({ open, onOpenChange, today, defaultDue, onAdded }:
             today={today}
             defaultDue={defaultDue}
             autoFocus
-            onAdded={(task) => {
-              onOpenChange(false)
+            onAdded={(task, { draftLeft }) => {
+              // Text typed while the add was saving is the next task: keep the
+              // sheet open for it rather than unmounting it (review of
+              // Phases 4-6).
+              if (!draftLeft)
+                onOpenChange(false)
               onAdded(task)
             }}
           />

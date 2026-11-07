@@ -13,9 +13,10 @@ vi.mock('../store/repository', async importOriginal => ({
   update: vi.fn(),
 }))
 
-function deferred() {
+/** A held-open store call. It resolves with what a real save returns. */
+function deferred<T>(value: T) {
   let resolve!: () => void
-  const promise = new Promise<never>(r => (resolve = r as () => void))
+  const promise = new Promise<T>(r => (resolve = () => r(value)))
   return { promise, resolve }
 }
 
@@ -36,7 +37,7 @@ const task = {
 
 describe('typing while a save is in flight', () => {
   it('keeps the inline editor open with the newer text when a save finishes', async () => {
-    const save = deferred()
+    const save = deferred({ ...task, title: 'Buy oat milk and bread' })
     vi.mocked(update).mockReturnValueOnce(save.promise)
     const user = userEvent.setup()
     render(<TaskItem task={task} onDelete={() => {}} today="2026-11-07" now={new Date(2026, 10, 7, 10)} />)
@@ -44,7 +45,7 @@ describe('typing while a save is in flight', () => {
     await user.click(screen.getByRole('button', { name: 'Edit "Buy oat milk"' }))
     const field = screen.getByRole('textbox')
     await user.type(field, ' and bread{Enter}')
-    expect(update).toHaveBeenCalledWith(task.id, { title: 'Buy oat milk and bread' })
+    expect(update).toHaveBeenCalledWith(task.id, { title: 'Buy oat milk and bread' }, { expectTitle: 'Buy oat milk' })
 
     // Still typing while the first save is in flight.
     await user.type(field, ' and eggs')
@@ -54,8 +55,8 @@ describe('typing while a save is in flight', () => {
   })
 
   it('saves the newer text by itself if focus left the field during the save', async () => {
-    const save = deferred()
-    vi.mocked(update).mockReturnValueOnce(save.promise).mockResolvedValueOnce(task)
+    const save = deferred({ ...task, title: 'Buy oat milk and bread' })
+    vi.mocked(update).mockReturnValueOnce(save.promise).mockResolvedValueOnce({ ...task, title: 'Buy oat milk and bread and eggs' })
     const user = userEvent.setup()
     render(<TaskItem task={task} onDelete={() => {}} today="2026-11-07" now={new Date(2026, 10, 7, 10)} />)
 
@@ -65,12 +66,12 @@ describe('typing while a save is in flight', () => {
     await user.tab()
     await act(async () => save.resolve())
 
-    expect(update).toHaveBeenLastCalledWith(task.id, { title: 'Buy oat milk and bread and eggs' })
+    expect(update).toHaveBeenLastCalledWith(task.id, { title: 'Buy oat milk and bread and eggs' }, { expectTitle: 'Buy oat milk and bread' })
     expect(update).toHaveBeenCalledTimes(2)
   })
 
   it('keeps newer text in the add form when the earlier add finishes', async () => {
-    const save = deferred()
+    const save = deferred({ ...task, title: 'Call the bank' })
     vi.mocked(add).mockReturnValueOnce(save.promise)
     const user = userEvent.setup()
     render(<AddTaskForm today="2026-11-07" />)
