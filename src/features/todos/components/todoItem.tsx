@@ -45,6 +45,7 @@ function TodoItem({ todo, showActions = true }: TodoItemProps) {
     <div className="flex items-center gap-3 flex-1">
       {/* Completion Toggle */}
       <button
+        type="button"
         onClick={handleToggleComplete}
         disabled={updateTodoMutation.isPending}
         className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
@@ -93,6 +94,7 @@ function TodoItem({ todo, showActions = true }: TodoItemProps) {
             ? (
                 <>
                   <button
+                    type="button"
                     onClick={handleSaveEdit}
                     className="p-1 text-orange-600 hover:text-orange-700"
                     disabled={updateTodoMutation.isPending}
@@ -101,6 +103,7 @@ function TodoItem({ todo, showActions = true }: TodoItemProps) {
                     <Check className="w-8 h-8" />
                   </button>
                   <button
+                    type="button"
                     onClick={handleCancelEdit}
                     className="p-1 text-gray-600 hover:text-gray-700"
                     title="Cancel editing"
@@ -119,6 +122,7 @@ function TodoItem({ todo, showActions = true }: TodoItemProps) {
                     <Eye className="w-4 h-4" />
                   </Link>
                   <button
+                    type="button"
                     onClick={() => setIsEditing(true)}
                     className="p-1 text-orange-600 hover:text-orange-700"
                     title="Edit todo"

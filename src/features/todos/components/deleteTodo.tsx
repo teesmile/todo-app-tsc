@@ -27,6 +27,7 @@ export function DeleteTodo({ id, onSuccess }: DeleteTodoProps) {
   return (
     <>
       <button
+        type="button"
         onClick={() => setShowConfirm(true)}
         className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-full"
         title="Delete todo"
@@ -47,12 +48,14 @@ export function DeleteTodo({ id, onSuccess }: DeleteTodoProps) {
 
               <div className="flex gap-3 justify-center">
                 <button
+                  type="button"
                   onClick={() => setShowConfirm(false)}
                   className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400"
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={handleDelete}
                   disabled={deleteTodoMutation.isPending}
                   className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
