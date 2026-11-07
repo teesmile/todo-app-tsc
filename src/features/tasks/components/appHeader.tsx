@@ -1,6 +1,8 @@
 'use client'
 
 import { useId, useState } from 'react'
+import { useAccount } from '@/features/account/accountContext'
+import { AccountMenu } from '@/features/account/accountMenu'
 import { useNow } from '../hooks/useNow'
 import { formatLongDate, greetingFor } from '../lib/dates'
 import { MAX_NAME_LENGTH, setDisplayName, skipNamePrompt, useProfile } from '../store/profile'
@@ -8,22 +10,31 @@ import { MAX_NAME_LENGTH, setDisplayName, skipNamePrompt, useProfile } from '../
 /**
  * "Good morning, Toni · Saturday 7 November". The greeting and date are
  * clock-based, so they render only in the browser (useNow is null on the
- * server), with a neutral heading until then. A first name is asked for
- * once, optional and skippable, and kept on this device.
+ * server), with a neutral heading until then. A signed-in user is greeted by
+ * the account's first name. A guest's first name is asked for once, optional
+ * and skippable, and kept on this device; the account's name never
+ * overwrites it, so it's still there after signing out.
  */
 export function AppHeader() {
   const now = useNow()
   const profile = useProfile()
-  const name = profile?.name ?? null
-  const askName = profile !== undefined && !profile.promptDone && !name
+  const { state } = useAccount()
+  const signedIn = state.status === 'signed-in'
+  const name = (signedIn ? state.user.firstName : null) ?? profile?.name ?? null
+  const askName = profile !== undefined && !signedIn && !profile.promptDone && !name
 
   return (
     <header className="border-b border-gray-200 bg-white">
       <div className="mx-auto max-w-5xl px-4 py-4">
-        <h1 className="text-xl font-bold text-gray-900 md:text-2xl">
-          {now ? `${greetingFor(now.getHours())}${name ? `, ${name}` : ''}` : 'Your tasks'}
-        </h1>
-        <p className="mt-0.5 text-sm text-gray-600">{now ? formatLongDate(now) : ' '}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-gray-900 md:text-2xl">
+              {now ? `${greetingFor(now.getHours())}${name ? `, ${name}` : ''}` : 'Your tasks'}
+            </h1>
+            <p className="mt-0.5 text-sm text-gray-600">{now ? formatLongDate(now) : ' '}</p>
+          </div>
+          <AccountMenu />
+        </div>
         {askName && <NamePrompt />}
       </div>
     </header>

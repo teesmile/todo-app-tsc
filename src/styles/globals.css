@@ -150,3 +150,20 @@
     outline-offset: 2px;
   }
 }
+
+/* Long-form text on /privacy and /terms. */
+@layer components {
+  .legal h2 {
+    @apply mt-7 text-lg font-semibold text-gray-900;
+  }
+  .legal p,
+  .legal ul {
+    @apply mt-3 leading-relaxed;
+  }
+  .legal ul {
+    @apply list-disc space-y-1.5 pl-5;
+  }
+  .legal a {
+    @apply font-medium text-orange-800 underline underline-offset-2;
+  }
+}
