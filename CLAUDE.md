@@ -22,6 +22,16 @@ A local-first task app. Next.js App Router (static export), React 19, Tailwind 4
 - Every animation has a `prefers-reduced-motion` path.
 - No placeholder routes, dead buttons or empty files. If it isn't built, it isn't in the tree.
 
+## Phase routine
+At the end of every phase in `docs/plan.md`, after its **Verified by** checks pass:
+1. Run the Codex adversarial review yourself, in the foreground, against `main`:
+   `node ~/.claude/plugins/cache/openai-codex/codex/<version>/scripts/codex-companion.mjs adversarial-review "--base main"`
+   Use the installed plugin version (`ls ~/.claude/plugins/cache/openai-codex/codex/`). Pass exactly `--base main`: anything appended to the ref, even a comma, makes git reject it.
+2. Wait for it to finish, then show me its findings unedited, from `# Codex Adversarial Review` to the end.
+3. Respond under the Codex review protocol below, fixing only what you agree with.
+4. Commit, then push `revamp`.
+5. Stop. The next phase starts only when I say so.
+
 ## Codex review protocol
 When Codex reviews a change:
 - Answer each point with AGREE or DISAGREE and the reason.
