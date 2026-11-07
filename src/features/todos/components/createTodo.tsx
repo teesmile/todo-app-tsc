@@ -7,7 +7,6 @@ import { AddTodoForm } from './addTodoForm'
 
 export function CreateTodo() {
   const [isOpen, setIsOpen] = useState(false)
-  const [title, setTitle] = useState<string>('')
 
   const handleSuccess = () => {
     setIsOpen(false)
@@ -20,6 +19,7 @@ export function CreateTodo() {
   return (
     <>
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
         className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-700 transition-colors"
       >

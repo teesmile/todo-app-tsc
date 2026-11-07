@@ -69,6 +69,7 @@ export function TodoDetail({ todoId }: TodoDetailProps) {
           <h1 className="text-2xl font-bold text-red-600">Todo Not Found</h1>
           <p className="text-gray-600 mt-2">The todo you're looking for doesn't exist.</p>
           <button
+            type="button"
             onClick={() => router.push('/')}
             className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
           >
@@ -86,6 +87,7 @@ export function TodoDetail({ todoId }: TodoDetailProps) {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
             <button
+              type="button"
               onClick={() => router.back()}
               className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg"
             >
@@ -142,6 +144,7 @@ export function TodoDetail({ todoId }: TodoDetailProps) {
                       />
                       <div className="flex gap-3 mt-4">
                         <button
+                          type="button"
                           onClick={saveEdit}
                           className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
                           disabled={updateTodoMutation.isPending || !editText.trim()}
@@ -150,6 +153,7 @@ export function TodoDetail({ todoId }: TodoDetailProps) {
                           {updateTodoMutation.isPending ? 'Saving...' : 'Save Changes'}
                         </button>
                         <button
+                          type="button"
                           onClick={cancelEdit}
                           className="inline-flex items-center gap-2 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
                         >
@@ -210,6 +214,7 @@ export function TodoDetail({ todoId }: TodoDetailProps) {
             {!isEditing && (
               <div className="flex gap-4 pt-6 border-t border-gray-200">
                 <button
+                  type="button"
                   onClick={startEditing}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
                 >
@@ -220,6 +225,7 @@ export function TodoDetail({ todoId }: TodoDetailProps) {
                 <DeleteTodo id={todo.id.toString()} />
 
                 <button
+                  type="button"
                   onClick={() => router.push('/')}
                   className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
                 >

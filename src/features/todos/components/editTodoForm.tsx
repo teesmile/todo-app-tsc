@@ -56,6 +56,7 @@ export function EditTodoForm({ todo, onSave, onCancel }: EditTodoFormProps) {
       />
       <div className="flex gap-2 mt-2">
         <button
+          type="button"
           onClick={handleSave}
           className="inline-flex items-center gap-1 px-3 py-1 bg-orange-600 text-white text-sm rounded-md hover:bg-orange-700 disabled:opacity-50"
           disabled={updateTodoMutation.isPending || !editText.trim()}
@@ -64,6 +65,7 @@ export function EditTodoForm({ todo, onSave, onCancel }: EditTodoFormProps) {
           {updateTodoMutation.isPending ? 'Saving...' : 'Save'}
         </button>
         <button
+          type="button"
           onClick={handleCancel}
           className="inline-flex items-center gap-1 px-3 py-1 bg-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-400"
         >

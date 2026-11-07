@@ -10,11 +10,7 @@ import { EditTodoForm } from './editTodoForm'
 // Import your modular components
 import TodoItem from './todoItem'
 
-export interface TodoListProps {
-  onTodoPrefetch?: (id: string) => void
-}
-
-export function TodoList({ onTodoPrefetch }: TodoListProps) {
+export function TodoList() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const page = searchParams?.get('page') ? Number(searchParams.get('page')) : 1
@@ -90,7 +86,7 @@ export function TodoList({ onTodoPrefetch }: TodoListProps) {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500 mb-4">No todos found</p>
-        <button className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+        <button type="button" className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
           <Plus className="w-4 h-4" />
           Create your first todo
         </button>
@@ -157,6 +153,7 @@ export function TodoList({ onTodoPrefetch }: TodoListProps) {
                       </Link>
 
                       <button
+                        type="button"
                         className="p-1 text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded"
                         title="Edit todo"
                         onClick={() => {
@@ -200,6 +197,7 @@ export function TodoList({ onTodoPrefetch }: TodoListProps) {
           </div>
           <div className="flex space-x-2">
             <button
+              type="button"
               className="px-3 py-1 text-sm border rounded-md disabled:opacity-50 hover:bg-gray-50"
               disabled={page <= 1}
               onClick={() => navigateToPage(page - 1)}
@@ -213,6 +211,7 @@ export function TodoList({ onTodoPrefetch }: TodoListProps) {
               {totalPages}
             </span>
             <button
+              type="button"
               className="px-3 py-1 text-sm border rounded-md disabled:opacity-50 hover:bg-gray-50"
               disabled={page >= totalPages}
               onClick={() => navigateToPage(page + 1)}

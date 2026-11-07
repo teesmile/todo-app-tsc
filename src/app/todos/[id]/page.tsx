@@ -10,7 +10,7 @@ export default async function TodoPage({ params }: TodoPageProps) {
   const { id } = await params
   const todoId = Number.parseInt(id)
 
-  if (isNaN(todoId)) {
+  if (Number.isNaN(todoId)) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
