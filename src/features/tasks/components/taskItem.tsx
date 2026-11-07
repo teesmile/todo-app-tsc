@@ -63,6 +63,15 @@ export function TaskItem({ task, onDelete, onSaved, onToggled, today, now }: Tas
   // stop that blur from saving a second time.
   const settled = useRef(false)
   const wasEditing = useRef(editing)
+  // A save started here can finish after this row has unmounted (it moved
+  // group), so its completion must not touch this instance's state.
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   useEffect(() => {
     if (editing && focusOnOpen.current)
@@ -103,6 +112,11 @@ export function TaskItem({ task, onDelete, onSaved, onToggled, today, now }: Tas
   async function commit() {
     if (settled.current)
       return
+    // The shared draft is the truth: another instance of this row (after a
+    // regroup) may have saved and moved the base on since this one mounted.
+    const shared = drafts.get(task.id)
+    if (shared)
+      baseRef.current = shared.base
     const submitted = draftRef.current
     if (submitted.trim() === baseRef.current) {
       // Untouched, or put back as it was: nothing to write.
@@ -113,6 +127,19 @@ export function TaskItem({ task, onDelete, onSaved, onToggled, today, now }: Tas
     try {
       const saved = await saveTitle.run(task.id, { title: submitted }, { expectTitle: baseRef.current })
       onSaved?.(saved)
+      // Clear the draft only if it still holds exactly what was submitted,
+      // checked in the shared store, so typing done in a remounted editor
+      // while this save was in flight survives (review of Phase 8).
+      const latest = drafts.get(task.id)
+      if (latest && latest.draft !== submitted) {
+        drafts.set(task.id, { ...latest, base: saved.title, conflicted: false })
+        if (!mounted.current)
+          return
+      }
+      if (!mounted.current) {
+        drafts.delete(task.id)
+        return
+      }
       baseRef.current = saved.title
       conflicted.current = false
       if (draftRef.current !== submitted) {
@@ -128,6 +155,8 @@ export function TaskItem({ task, onDelete, onSaved, onToggled, today, now }: Tas
       close()
     }
     catch (error) {
+      if (!mounted.current)
+        return
       // Shown below; stay in the field with the draft so nothing is lost.
       settled.current = false
       if (error instanceof TitleConflictError) {

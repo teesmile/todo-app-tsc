@@ -43,9 +43,12 @@ function LabelRow({ category, uses }: { category: Category, uses: number }) {
       setEdit(null)
       return
     }
+    const submitted = edit.draft
     try {
-      await save.run(category.id, { name: edit.draft }, { expectName: edit.base })
-      setEdit(null)
+      const saved = await save.run(category.id, { name: submitted }, { expectName: edit.base })
+      // Clear only if nothing was typed meanwhile; otherwise keep the newer
+      // text, now based on the saved name (review of Phase 8).
+      setEdit(current => (!current || current.draft === submitted ? null : { ...current, base: saved.name }))
     }
     catch (error) {
       // Shown below. After a conflict the next Enter knowingly replaces it.
@@ -167,9 +170,11 @@ export function LabelManager({ open, onClose, categories, uses }: LabelManagerPr
       <form
         onSubmit={async (e) => {
           e.preventDefault()
+          const submitted = name
           try {
-            await create.run({ name, color })
-            setName('')
+            await create.run({ name: submitted, color })
+            // Text typed while it was saving is the next label: keep it.
+            setName(current => (current === submitted ? '' : current))
             nameRef.current?.focus()
           }
           catch {
