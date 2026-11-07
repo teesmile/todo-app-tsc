@@ -28,6 +28,13 @@ Study: <one concept, with a link or a search term>
 
 ---
 
+## 2026-11-07 — Codex review 5: Phase 3 truncated, swallowed and stranded
+Codex challenged: (1) the legacy import truncates descriptions over 500 characters, then marks the import done; (2) both forms swallow save failures, including the new 500-character limit; (3) a failed legacy import is invisible, with no retry; (4) deleting the only row on page 2 leaves an empty list with no way back.
+Verdict: AGREE on all four; DISAGREE only with clamping the page (pagination removed instead)
+Because: (1) The old app had no limit, so cutting text at 500 lost user content. Imports now keep full text, edits may keep or shorten a long title but never grow it, and Phase 8's server cap becomes 10,000, with anything longer kept on the device and reported. (2) Both forms now show a `role="alert"` message, keep the draft, carry `maxLength` and state the limit. (3) A failed import now shows an alert saying the old tasks are safe, with a Try again button that re-runs it without a reload. (4) Phase 5 deletes pagination anyway, so clamping would be new code in something about to be removed; deleting it now removes the whole class of bug. Found on the way: a second spacing bug from the Phase 0 format commit (`41bc7ae`) in the pagination text ("1 of2"). It went with the code, and a wider scan of the tree finds no others.
+Changed: `legacyImport.ts`, `repository.ts` (`TitleError`, the never-grow rule), both forms, `hooks.ts` (`retryLegacyImport`), `page.tsx`, and `todoList.tsx` (pagination removed). New tests cover a 687-character import, the length limit, form alerts, failed-import retry and the no-pagination delete (39 pass; each new form test fails without its fix). `docs/plan.md` Phases 5, 8 and 9 are updated.
+Study: "never truncate on migration": why import code should widen its target constraints rather than narrow the user's data.
+
 ## 2026-11-07 — Dexie + useLiveQuery as the task store (f610633)
 Decided by: Anthony (owner direction): use Dexie unless Phase 3 finds a concrete reason against it.
 Claim: IndexedDB through Dexie 4.4, read with `dexie-react-hooks`' `useLiveQuery`, replacing TanStack Query and the hand-written wrapper.

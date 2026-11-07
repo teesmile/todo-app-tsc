@@ -177,7 +177,7 @@ Putting the sync fields in the v1 schema costs nothing now and means users' data
 - **Filters** are All, Active, Done, Today and Overdue, built as native radio inputs inside a `<fieldset>` with a legend, styled as a segmented control. Search and filter live in the URL (`?q=&filter=`) so Back and reload keep them.
 - **Stats** come from `computeStats(allTasks, today)`: total, done, active, overdue, due today and completion %. They're computed over every live task, not a page (audit §1.4), and the stats text is the accessible label for its ring.
 - **Shortcuts**: `n` focuses the add form (or opens the sheet), `/` focuses search, and `Escape` leaves either. A shortcut is ignored while focus is in an input, textarea or contenteditable, or while Ctrl, Meta or Alt is held.
-- Pagination goes away. Grouped lists of local data don't need it.
+- ~~Pagination goes away.~~ Done early, in Phase 3: deleting the last row on page 2 stranded an empty page (Codex review 5), and clamping code that was due for deletion wasn't worth writing.
 
 **Why** Filtering is a pure function over data already in memory, so it's instant and doesn't need a debounce. A debounce would only make results lag behind typing. URL state is the cheapest way to make filters survive a reload without another store.
 
@@ -224,7 +224,7 @@ Merge `revamp` to `main` and deploy, so the live link on the resume shows a work
 - **Table** `public.tasks`:
   - `id uuid primary key`
   - `user_id uuid not null default auth.uid() references auth.users on delete cascade`
-  - `title text not null check (char_length(title) between 1 and 500)`
+  - `title text not null check (char_length(title) between 1 and 10000)`. That's 10,000, not the 500 you can type: tasks imported from the old app keep their full text, however long (Codex review 5). The 500 limit is enforced by the client for new and grown titles.
   - `completed boolean not null default false`
   - `due_date date`
   - `created_at`, `updated_at`, `completed_at`, `deleted_at` as `timestamptz` (`updated_at not null`)
@@ -306,6 +306,7 @@ Manually: sign up with email (confirmation arrives through custom SMTP), sign in
 - **First sign-in import**:
   - If the device has guest tasks that aren't tombstoned, a dialog offers "Add N tasks from this device to your account", with sample tasks excluded by default and a checkbox to include them.
   - Accept: one transaction sets `ownerId = user` and `dirty = 1` on them, and ids are kept, so a retry can't duplicate.
+  - A guest task whose title is over the server's 10,000-character cap (possible only from the legacy import) is kept on the device as a guest task and listed in the dialog as "too long to sync". It's never dropped or truncated.
   - Decline: they stay as guest tasks, visible when signed out.
   - The offer is made once per account per device (a `meta` flag), and "Import tasks from this device" stays in the account menu afterwards.
 - **Sign out**: push first.
