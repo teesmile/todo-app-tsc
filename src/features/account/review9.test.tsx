@@ -5,6 +5,7 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppHeader } from '@/features/tasks/components/appHeader'
+import { FakeRemote } from '@/test/fakeRemote'
 import { AccountProvider } from './accountProvider'
 import { accountClientFrom, AUTH_OPTIONS } from './client'
 
@@ -24,6 +25,7 @@ function setup(client: Partial<AccountClient>, user: AccountUser | null) {
     signInWithGoogle: async () => null,
     signOut: async () => null,
     deleteAccount: vi.fn(async () => null),
+    remote: new FakeRemote(),
     ...client,
   }
   const events = userEvent.setup()
@@ -37,7 +39,7 @@ describe('1: deleting is bound to the account that was confirmed', () => {
   it('drops the confirmation when another tab signs in as someone else', async () => {
     window.localStorage.setItem('sb-test-auth-token', '{}')
     const { client, events, otherTab } = setup({}, toni)
-    await events.click(await screen.findByRole('button', { name: 'Account: Toni' }))
+    await events.click(await screen.findByRole('button', { name: /^Account: Toni/ }))
     await events.click(screen.getByRole('button', { name: 'Delete account…' }))
     expect(screen.getByRole('dialog', { name: 'Delete your account?' })).toHaveTextContent('toni@example.com')
 
@@ -52,7 +54,7 @@ describe('1: deleting is bound to the account that was confirmed', () => {
   it('names the confirmed account in the delete call, for the server to check', async () => {
     window.localStorage.setItem('sb-test-auth-token', '{}')
     const { client, events } = setup({}, toni)
-    await events.click(await screen.findByRole('button', { name: 'Account: Toni' }))
+    await events.click(await screen.findByRole('button', { name: /^Account: Toni/ }))
     await events.click(screen.getByRole('button', { name: 'Delete account…' }))
     await events.click(screen.getByRole('button', { name: 'Delete my account' }))
     expect(client.deleteAccount).toHaveBeenCalledExactlyOnceWith('u-toni')

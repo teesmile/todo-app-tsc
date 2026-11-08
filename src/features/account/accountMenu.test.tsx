@@ -7,6 +7,7 @@ import { AppHeader } from '@/features/tasks/components/appHeader'
 import { getDb } from '@/features/tasks/store/db'
 import { setDisplayName } from '@/features/tasks/store/profile'
 import { add } from '@/features/tasks/store/repository'
+import { FakeRemote } from '@/test/fakeRemote'
 import { AccountProvider } from './accountProvider'
 
 const toni: AccountUser = { id: 'u1', email: 'toni@example.com', firstName: 'Toni', fullName: 'Toni Ugwuja' }
@@ -25,6 +26,7 @@ function fakeClient(overrides: Partial<AccountClient> = {}, user: AccountUser | 
       return null
     }),
     deleteAccount: vi.fn(async () => null),
+    remote: new FakeRemote(),
     ...overrides,
   } satisfies AccountClient
   return client
@@ -75,7 +77,7 @@ describe('account menu', () => {
     const client = fakeClient({}, toni)
     const { load } = renderHeader(client)
 
-    expect(await screen.findByRole('button', { name: 'Account: Toni' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /^Account: Toni/ })).toBeInTheDocument()
     expect(load).toHaveBeenCalledOnce()
     expect(screen.getByRole('status')).toHaveTextContent('Signed in as Toni Ugwuja')
     expect(window.location.search).toBe('?filter=overdue')
@@ -86,7 +88,7 @@ describe('account menu', () => {
   it('restores a saved session on a later visit', async () => {
     window.localStorage.setItem('sb-test-auth-token', '{}')
     renderHeader(fakeClient({}, toni))
-    expect(await screen.findByRole('button', { name: 'Account: Toni' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /^Account: Toni/ })).toBeInTheDocument()
   })
 
   it('says so when the redirect comes back with an error, and stays a guest', async () => {
@@ -112,16 +114,17 @@ describe('account menu', () => {
     const client = fakeClient({}, toni)
     const { user } = renderHeader(client)
 
-    await user.click(await screen.findByRole('button', { name: 'Account: Toni' }))
+    await user.click(await screen.findByRole('button', { name: /^Account: Toni/ }))
     const dialog = screen.getByRole('dialog', { name: 'Your account' })
     expect(dialog).toHaveTextContent('toni@example.com')
-    expect(dialog).toHaveTextContent('aren\'t copied to your account')
+    expect(dialog).toHaveTextContent('Your tasks are synced with your account')
     await user.click(within(dialog).getByRole('button', { name: 'Sign out' }))
 
     const signIn = await screen.findByRole('button', { name: 'Sign in' })
     expect(client.signOut).toHaveBeenCalledOnce()
-    expect(signIn).toHaveFocus()
-    expect(screen.getByRole('status')).toHaveTextContent('Signed out')
+    // Focus returns when the dialog closes, once sign-out has finished.
+    await waitFor(() => expect(signIn).toHaveFocus())
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Signed out'))
     await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/, Tee$/))
   })
 
@@ -130,7 +133,7 @@ describe('account menu', () => {
     const client = fakeClient({}, toni)
     const { user } = renderHeader(client)
 
-    await user.click(await screen.findByRole('button', { name: 'Account: Toni' }))
+    await user.click(await screen.findByRole('button', { name: /^Account: Toni/ }))
     await user.click(screen.getByRole('button', { name: 'Delete account…' }))
     expect(screen.getByRole('dialog', { name: 'Delete your account?' })).toHaveTextContent('can\'t be undone')
     expect(client.deleteAccount).not.toHaveBeenCalled()
@@ -138,7 +141,7 @@ describe('account menu', () => {
     await user.click(screen.getByRole('button', { name: 'Delete my account' }))
     expect(await screen.findByRole('button', { name: 'Sign in' })).toBeInTheDocument()
     expect(client.deleteAccount).toHaveBeenCalledExactlyOnceWith('u1')
-    expect(screen.getByRole('status')).toHaveTextContent('Your account and everything stored with it were deleted')
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your account and everything stored with it were deleted'))
   })
 
   it('keeps the account and says why when deleting fails', async () => {
@@ -146,7 +149,7 @@ describe('account menu', () => {
     const client = fakeClient({ deleteAccount: vi.fn(async () => 'network error') }, toni)
     const { user } = renderHeader(client)
 
-    await user.click(await screen.findByRole('button', { name: 'Account: Toni' }))
+    await user.click(await screen.findByRole('button', { name: /^Account: Toni/ }))
     await user.click(screen.getByRole('button', { name: 'Delete account…' }))
     await user.click(screen.getByRole('button', { name: 'Delete my account' }))
 
@@ -160,7 +163,7 @@ describe('account menu', () => {
     const before = await getDb().tasks.toArray()
     const { user } = renderHeader(fakeClient({}, toni))
 
-    await user.click(await screen.findByRole('button', { name: 'Account: Toni' }))
+    await user.click(await screen.findByRole('button', { name: /^Account: Toni/ }))
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
     await screen.findByRole('button', { name: 'Sign in' })
 

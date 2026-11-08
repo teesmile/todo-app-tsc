@@ -12,6 +12,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.db.test.ts'],
+    // Dexie (the sync tests' devices) needs IndexedDB before it loads.
+    setupFiles: ['./vitest.idb.ts'],
     globalSetup: ['./vitest.db.setup.ts'],
     testTimeout: 20_000,
   },

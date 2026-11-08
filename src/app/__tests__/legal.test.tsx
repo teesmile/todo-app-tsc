@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { AccountProvider } from '@/features/account/accountProvider'
 import { AppHeader } from '@/features/tasks/components/appHeader'
 import { runLegacyImport } from '@/features/tasks/store/legacyImport'
+import { FakeRemote } from '@/test/fakeRemote'
 import Home from '../page'
 import PrivacyPage from '../privacy/page'
 import TermsPage from '../terms/page'
@@ -40,8 +41,9 @@ describe('privacy and terms', () => {
     expect(text()).toMatch(/Google shares your name, email address and profile picture/)
     expect(text()).toMatch(/never sold/)
     expect(text()).toMatch(/choose “Delete account” and confirm/)
-    // Honest about Phase 9: signing in doesn't sync tasks yet.
-    expect(text()).toMatch(/Today, signing in doesn't copy your tasks anywhere/)
+    // Phase 10: says what sync stores, and what sign-out leaves behind.
+    expect(text()).toMatch(/your tasks and labels .* are synced with your account and stored with it in London/)
+    expect(text()).toMatch(/changes that haven't synced yet stay on it, hidden, until you sign in again/)
     expect(screen.getByRole('link', { name: 'anthonyugwujac@gmail.com' })).toHaveAttribute('href', 'mailto:anthonyugwujac@gmail.com')
     expect(screen.getByRole('link', { name: /Back to your tasks/ })).toHaveAttribute('href', '/')
     expect(await violations()).toEqual([])
@@ -66,9 +68,10 @@ describe('privacy and terms', () => {
       signInWithGoogle: async () => null,
       signOut: async () => null,
       deleteAccount: async () => null,
+      remote: new FakeRemote(),
     }
     render(<AccountProvider configured load={async () => client}><AppHeader /></AccountProvider>)
-    await user.click(await screen.findByRole('button', { name: 'Account: Ada' }))
+    await user.click(await screen.findByRole('button', { name: /^Account: Ada/ }))
     expect(await violations()).toEqual([])
     await user.click(screen.getByRole('button', { name: 'Delete account…' }))
     expect(await violations()).toEqual([])

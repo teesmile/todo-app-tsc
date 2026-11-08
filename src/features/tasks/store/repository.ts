@@ -43,6 +43,16 @@ export class TitleError extends Error {
   }
 }
 
+/**
+ * The `updatedAt` for a write to `current`: now, but always later than the
+ * version it replaces. The server keeps whichever write has the later
+ * `updatedAt` (Phase 10), so a device whose clock runs slow would otherwise
+ * lose an edit made on top of a newer synced version, silently.
+ */
+export function nextUpdatedAt(current: { updatedAt: number }, now = Date.now()): number {
+  return Math.max(now, current.updatedAt + 1)
+}
+
 function cleanTitle(title: string, allowedLength = MAX_TITLE_LENGTH): string {
   const trimmed = title.trim()
   if (!trimmed)
@@ -108,7 +118,7 @@ export async function update(id: string, patch: TaskPatch, { db = getDb(), expec
       throw new TitleConflictError(current.title)
 
     const now = Date.now()
-    const next: Task = { ...current, updatedAt: now, dirty: 1, rev: current.rev + 1 }
+    const next: Task = { ...current, updatedAt: nextUpdatedAt(current, now), dirty: 1, rev: current.rev + 1 }
 
     if (patch.title !== undefined) {
       next.title = cleanTitle(patch.title, Math.max(MAX_TITLE_LENGTH, current.title.length))
@@ -146,7 +156,7 @@ export async function remove(id: string, { db = getDb() }: { db?: TasksDB } = {}
 
     const now = Date.now()
     const rev = current.rev + 1
-    await db.tasks.put({ ...current, deletedAt: now, deletedRev: rev, updatedAt: now, dirty: 1, rev })
+    await db.tasks.put({ ...current, deletedAt: now, deletedRev: rev, updatedAt: nextUpdatedAt(current, now), dirty: 1, rev })
     return { id, rev }
   })
 }
@@ -162,11 +172,13 @@ export async function undoRemove(token: UndoToken, { db = getDb() }: { db?: Task
   return db.transaction('rw', db.tasks, async () => {
     const current = await db.tasks.get(token.id)
     // Matched on deletedRev, which only a delete sets, not on rev, which any
-    // later write to the tombstone bumps.
-    if (!current || current.deletedAt === null || current.deletedRev !== token.rev)
+    // later write to the tombstone bumps. Sync clears deletedRev once the
+    // server has the delete (Phase 10): from then on the delete is final
+    // everywhere, so a late Undo (a paused toast) is refused here.
+    if (!current || current.deletedAt === null || current.deletedRev == null || current.deletedRev !== token.rev)
       return false
 
-    await db.tasks.put({ ...current, deletedAt: null, deletedRev: null, updatedAt: Date.now(), dirty: 1, rev: current.rev + 1 })
+    await db.tasks.put({ ...current, deletedAt: null, deletedRev: null, updatedAt: nextUpdatedAt(current), dirty: 1, rev: current.rev + 1 })
     return true
   })
 }
@@ -185,7 +197,7 @@ export async function clearSamples({ db = getDb(), ownerId = GUEST }: { db?: Tas
       .filter(task => task.ownerId === ownerId && task.deletedAt === null)
       .toArray()
     const now = Date.now()
-    await db.tasks.bulkPut(samples.map(task => ({ ...task, deletedAt: now, deletedRev: task.rev + 1, updatedAt: now, dirty: 1, rev: task.rev + 1 })))
+    await db.tasks.bulkPut(samples.map(task => ({ ...task, deletedAt: now, deletedRev: task.rev + 1, updatedAt: nextUpdatedAt(task, now), dirty: 1, rev: task.rev + 1 })))
     return samples.map(task => ({ id: task.id, rev: task.rev + 1 }))
   })
 }
@@ -306,7 +318,7 @@ export async function updateCategory(id: string, patch: { name?: string, color?:
     // Compare-and-set, as for task titles: never silently overwrite a newer name.
     if (expectName !== undefined && current.name !== expectName)
       throw new CategoryConflictError(current.name)
-    const next: Category = { ...current, updatedAt: Date.now(), dirty: 1, rev: current.rev + 1 }
+    const next: Category = { ...current, updatedAt: nextUpdatedAt(current), dirty: 1, rev: current.rev + 1 }
     if (patch.name !== undefined)
       next.name = await cleanCategoryName(db, current.ownerId, patch.name, id)
     if (patch.color !== undefined)
@@ -327,9 +339,9 @@ export async function removeCategory(id: string, { db = getDb() }: { db?: TasksD
     if (!current || current.deletedAt !== null)
       return 0
     const now = Date.now()
-    await db.categories.put({ ...current, deletedAt: now, updatedAt: now, dirty: 1, rev: current.rev + 1 })
+    await db.categories.put({ ...current, deletedAt: now, updatedAt: nextUpdatedAt(current, now), dirty: 1, rev: current.rev + 1 })
     const tasks = await db.tasks.where('categoryIds').equals(id).toArray()
-    await db.tasks.bulkPut(tasks.map(task => ({ ...task, categoryIds: task.categoryIds.filter(c => c !== id), updatedAt: now, dirty: 1, rev: task.rev + 1 })))
+    await db.tasks.bulkPut(tasks.map(task => ({ ...task, categoryIds: task.categoryIds.filter(c => c !== id), updatedAt: nextUpdatedAt(task, now), dirty: 1, rev: task.rev + 1 })))
     return tasks.filter(t => t.deletedAt === null).length
   })
 }
@@ -351,7 +363,7 @@ export async function setTaskLabel(taskId: string, labelId: string, on: boolean,
     const next: Task = {
       ...current,
       categoryIds: on ? [...current.categoryIds, labelId] : current.categoryIds.filter(id => id !== labelId),
-      updatedAt: Date.now(),
+      updatedAt: nextUpdatedAt(current),
       dirty: 1,
       rev: current.rev + 1,
     }
@@ -363,4 +375,30 @@ export async function setTaskLabel(taskId: string, labelId: string, on: boolean,
 /** Live labels for `ownerId`, by name. */
 export async function listCategories({ db = getDb(), ownerId = GUEST }: { db?: TasksDB, ownerId?: OwnerId } = {}): Promise<Category[]> {
   return (await liveCategories(db, ownerId)).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * Folds label `fromId` into label `intoId`, in one transaction: every task
+ * with `from` gets `into` instead (once), and `from` is tombstoned. For the
+ * duplicate pair two offline devices make when both create "Work"; the server
+ * allows duplicate names on purpose, so that neither device's push fails.
+ * Returns how many live tasks changed.
+ */
+export async function mergeCategory(fromId: string, intoId: string, { db = getDb() }: { db?: TasksDB } = {}): Promise<number> {
+  return db.transaction('rw', db.categories, db.tasks, async () => {
+    const [from, into] = await Promise.all([db.categories.get(fromId), db.categories.get(intoId)])
+    if (!from || !into || from.deletedAt !== null || into.deletedAt !== null || from.ownerId !== into.ownerId || fromId === intoId)
+      throw new CategoryNameError('That label no longer exists.')
+    const now = Date.now()
+    await db.categories.put({ ...from, deletedAt: now, updatedAt: nextUpdatedAt(from, now), dirty: 1, rev: from.rev + 1 })
+    const tasks = await db.tasks.where('categoryIds').equals(fromId).toArray()
+    await db.tasks.bulkPut(tasks.map(task => ({
+      ...task,
+      categoryIds: [...new Set(task.categoryIds.map(id => (id === fromId ? intoId : id)))],
+      updatedAt: nextUpdatedAt(task, now),
+      dirty: 1,
+      rev: task.rev + 1,
+    })))
+    return tasks.filter(t => t.deletedAt === null).length
+  })
 }

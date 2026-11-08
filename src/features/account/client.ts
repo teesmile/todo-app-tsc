@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AccountUser } from './session'
+import type { Remote } from '@/features/tasks/sync/types'
+import { supabaseRemote } from '@/features/tasks/sync/supabaseRemote'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config'
 import { accountUserFrom } from './session'
 
@@ -23,6 +25,8 @@ export interface AccountClient {
    * server refuses unless `expectedUserId` is still the signed-in user.
    */
   deleteAccount: (expectedUserId: string) => Promise<string | null>
+  /** The server as the sync engine sees it, signed in as this session's user. */
+  remote: Remote
 }
 
 let loading: Promise<AccountClient> | null = null
@@ -53,12 +57,20 @@ export function accountClientFrom(supabase: SupabaseClient): AccountClient {
     },
     async signOut() {
       const { error } = await supabase.auth.signOut({ scope: 'local' })
+      if (error) {
+        // Offline, the SDK still removes this device's session but reports
+        // the failed server call. Signed out is what matters here.
+        const { data } = await supabase.auth.getSession()
+        if (!data.session)
+          return null
+      }
       return error?.message ?? null
     },
     async deleteAccount(expectedUserId) {
       const { error } = await supabase.rpc('delete_my_account', { expected_user_id: expectedUserId })
       return error?.message ?? null
     },
+    remote: supabaseRemote(supabase),
   }
 }
 

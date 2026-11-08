@@ -10,7 +10,7 @@ const CONTACT_EMAIL = 'anthonyugwujac@gmail.com'
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy" updated="7 November 2026">
+    <LegalPage title="Privacy" updated="8 November 2026">
       <p>
         Todo App is a task list made and run by Anthony Ugwuja. This page says, in plain words, what it keeps,
         where, and how to get rid of it. The short version: your tasks live on your device, an account is
@@ -38,13 +38,21 @@ export default function PrivacyPage() {
         browser.
       </p>
       <p>
-        <strong>Today, signing in doesn&apos;t copy your tasks anywhere.</strong>
-        {' '}
-        Task sync is being built. When it&apos;s switched on, your tasks and labels (the same details listed above)
-        will be stored with your account in London, so they reach your other devices. Only your account can read
-        them: the database refuses every other account&apos;s request. This page will be updated before that happens.
+        While you&apos;re signed in, your tasks and labels (the same details listed above, and when each was
+        deleted) are synced with your account and stored with it in London, so they reach your other devices.
+        Deleted tasks are kept there as a marker, so a delete can&apos;t be undone by an older copy on another
+        device. Only your account can read them: the database refuses every other account&apos;s request.
       </p>
-      <p>The session that keeps you signed in is saved in your browser&apos;s local storage. The app sets no cookies.</p>
+      <p>
+        Tasks you made before signing in stay on the device unless you choose to add them to your account. When
+        you sign out, your account&apos;s tasks are removed from that device; changes that haven&apos;t synced yet
+        stay on it, hidden, until you sign in again.
+      </p>
+      <p>
+        The session that keeps you signed in, and your account&apos;s ID, name and email address (so the app
+        still knows who you are when you open it offline), are saved in your browser&apos;s local storage. The
+        app sets no cookies.
+      </p>
 
       <h2>What Google sign-in shares</h2>
       <p>
@@ -58,7 +66,7 @@ export default function PrivacyPage() {
         <li>
           <strong>Supabase</strong>
           {' '}
-          stores accounts (and, later, synced tasks) in London.
+          stores accounts, with their synced tasks and labels, in London.
         </li>
         <li>
           <strong>Google</strong>
@@ -83,8 +91,9 @@ export default function PrivacyPage() {
           <strong>Your account:</strong>
           {' '}
           sign in, open your account (top right), choose &ldquo;Delete account&rdquo; and confirm. Your account and
-          everything stored with it are deleted from the database straight away. Supabase may keep them in routine
-          backups for a short time until those expire.
+          every task and label stored with it are deleted from the database straight away, and from the device
+          you&apos;re using. Supabase may keep them in routine backups for a short time until those expire. On another
+          device that was signed in, the copies stay on that device until you clear this site&apos;s data there.
         </li>
         <li>
           <strong>Tasks on a device:</strong>

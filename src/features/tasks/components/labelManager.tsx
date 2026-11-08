@@ -2,10 +2,12 @@
 
 import type { Category, CategoryColor } from '../store/types'
 import { X } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useOwnerId } from '@/features/account/accountContext'
 import { useAction } from '../hooks/useAction'
+import { duplicatesOf } from '../lib/labels'
 import { PALETTE } from '../lib/palette'
-import { CategoryConflictError, createCategory, MAX_CATEGORY_NAME_LENGTH, removeCategory, updateCategory } from '../store/repository'
+import { CategoryConflictError, createCategory, MAX_CATEGORY_NAME_LENGTH, mergeCategory, removeCategory, updateCategory } from '../store/repository'
 import { CATEGORY_COLORS } from '../store/types'
 
 function errorText(error: unknown) {
@@ -25,7 +27,7 @@ function ColourSelect({ value, onChange, label }: { value: CategoryColor, onChan
   )
 }
 
-function LabelRow({ category, uses }: { category: Category, uses: number }) {
+function LabelRow({ category, uses, duplicateOf }: { category: Category, uses: number, duplicateOf?: Category }) {
   // While untouched, the field mirrors the stored name, so a rename in
   // another tab shows up and leaving the field writes nothing (review of
   // Phase 7). `base` is the name the edit started from, for compare-and-set.
@@ -39,6 +41,7 @@ function LabelRow({ category, uses }: { category: Category, uses: number }) {
   const save = useAction(updateCategory)
   const recolor = useAction(updateCategory)
   const drop = useAction(removeCategory)
+  const merge = useAction(mergeCategory)
 
   async function rename() {
     if (!edit)
@@ -64,7 +67,7 @@ function LabelRow({ category, uses }: { category: Category, uses: number }) {
     }
   }
 
-  const failure = [save.error, recolor.error, drop.error].find(e => e && !(e instanceof CategoryConflictError))
+  const failure = [save.error, recolor.error, drop.error, merge.error].find(e => e && !(e instanceof CategoryConflictError))
 
   return (
     <li className="rounded-xl bg-gray-50 p-2">
@@ -108,6 +111,14 @@ function LabelRow({ category, uses }: { category: Category, uses: number }) {
           </button>
         )}
       </div>
+      {duplicateOf && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <p className="text-gray-800">{`Another label is also called "${duplicateOf.name}", probably made on another device.`}</p>
+          <button type="button" onClick={() => merge.fire(category.id, duplicateOf.id)} className="min-h-11 rounded-lg px-3 font-medium text-orange-800 ring-1 ring-orange-300 hover:bg-orange-50 md:min-h-9">
+            {`Merge into the other "${duplicateOf.name}"`}
+          </button>
+        </div>
+      )}
       {confirming && (
         <div role="group" aria-label={`Confirm deleting "${category.name}"`} className="mt-2 flex flex-wrap items-center gap-2 text-sm">
           <p className="text-gray-800">
@@ -151,6 +162,8 @@ export function LabelManager({ open, onClose, categories, uses }: LabelManagerPr
   const [name, setName] = useState('')
   const [color, setColor] = useState<CategoryColor>('blue')
   const create = useAction(createCategory)
+  const ownerId = useOwnerId()
+  const duplicates = useMemo(() => duplicatesOf(categories), [categories])
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -188,7 +201,7 @@ export function LabelManager({ open, onClose, categories, uses }: LabelManagerPr
           e.preventDefault()
           const submitted = name
           try {
-            await create.run({ name: submitted, color })
+            await create.run({ name: submitted, color }, { ownerId: ownerId ?? undefined })
             // Text typed while it was saving is the next label: keep it.
             setName(current => (current === submitted ? '' : current))
             nameRef.current?.focus()
@@ -223,7 +236,7 @@ export function LabelManager({ open, onClose, categories, uses }: LabelManagerPr
         ? <p className="text-sm text-gray-600">No labels yet. Add one above, then put it on tasks from their Label chip.</p>
         : (
             <ul className="space-y-2">
-              {categories.map(c => <LabelRow key={c.id} category={c} uses={uses.get(c.id) ?? 0} />)}
+              {categories.map(c => <LabelRow key={c.id} category={c} uses={uses.get(c.id) ?? 0} duplicateOf={duplicates.get(c.id)} />)}
             </ul>
           )}
     </dialog>

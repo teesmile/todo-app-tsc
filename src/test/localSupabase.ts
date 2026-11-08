@@ -24,6 +24,11 @@ function accessToken(userId: string) {
   return `${header}.${payload}.${signature}`
 }
 
+/** The local stack's Postgres URL (its own development credentials, never production's). */
+export function localDbUrl(): string {
+  return local().dbUrl
+}
+
 /** The local stack's admin client, used only to create and inspect users. */
 export function adminClient(): SupabaseClient {
   return createClient(local().url, local().secretKey, noSession)
@@ -49,4 +54,12 @@ export async function createUser(label: string): Promise<TestUser> {
     global: { headers: { Authorization: `Bearer ${accessToken(data.user.id)}` } },
   })
   return { id: data.user.id, db }
+}
+
+/** Another client signed in as an existing user: a second device. */
+export function clientFor(userId: string): SupabaseClient {
+  return createClient(local().url, local().publishableKey, {
+    ...noSession,
+    global: { headers: { Authorization: `Bearer ${accessToken(userId)}` } },
+  })
 }

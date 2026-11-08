@@ -72,3 +72,34 @@ export function firstNameFrom(metadata: Record<string, unknown> | undefined): st
   const name = given || full.split(/\s+/)[0] || ''
   return name ? name.slice(0, MAX_NAME_LENGTH) : null
 }
+
+const REMEMBERED_KEY = 'todo:account'
+
+/**
+ * The last signed-in user, kept on this device so that opening the app
+ * offline still shows their tasks: the saved Supabase session is still here,
+ * but the SDK can't confirm it without the network. Only id, name and email.
+ */
+export function rememberAccount(user: AccountUser, storage: Pick<Storage, 'setItem'> = window.localStorage): void {
+  try {
+    storage.setItem(REMEMBERED_KEY, JSON.stringify(user))
+  }
+  catch {}
+}
+
+export function rememberedAccount(storage: Pick<Storage, 'getItem'> = window.localStorage): AccountUser | null {
+  try {
+    const value = JSON.parse(storage.getItem(REMEMBERED_KEY) ?? 'null') as AccountUser | null
+    return value && typeof value.id === 'string' ? value : null
+  }
+  catch {
+    return null
+  }
+}
+
+export function forgetRememberedAccount(storage: Pick<Storage, 'removeItem'> = window.localStorage): void {
+  try {
+    storage.removeItem(REMEMBERED_KEY)
+  }
+  catch {}
+}

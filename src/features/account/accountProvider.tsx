@@ -1,13 +1,21 @@
 'use client'
 
-import type { Account, AccountState } from './accountContext'
+import type { Account, AccountState, SignOutResult } from './accountContext'
 import type { AccountClient } from './client'
 import type { SignInMethod } from './config'
+import type { AccountUser } from './session'
+import type { ImportCandidates } from '@/features/tasks/sync/account'
+import type { Remote } from '@/features/tasks/sync/types'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { getDb } from '@/features/tasks/store/db'
+import { declineImport, evictSignedOutUser, forgetUser, importCandidates, importGuestTasks, importOfferedKey, unsyncedCount } from '@/features/tasks/sync/account'
+import { pushAll } from '@/features/tasks/sync/engine'
+import { useSync } from '@/features/tasks/sync/useSync'
 import { AccountContext } from './accountContext'
 import { loadAccountClient } from './client'
 import { accountsConfigured } from './config'
-import { callbackError, isAuthCallback, mayHaveSession, withoutAuthParams } from './session'
+import { callbackError, forgetRememberedAccount, isAuthCallback, mayHaveSession, rememberAccount, rememberedAccount, withoutAuthParams } from './session'
 
 const CONFIGURED = accountsConfigured()
 const UNREACHABLE = 'Accounts can\'t be reached right now. Your tasks are safe on this device.'
@@ -30,26 +38,43 @@ interface AccountProviderProps {
 }
 
 /**
- * Owns the sign-in state. A guest with no saved session and no Google
- * redirect in the URL stays a guest without the SDK ever loading. Otherwise
- * the SDK loads, restores the session (finishing the redirect's code
- * exchange), and the sign-in parameters are removed from the URL while the
- * list's own parameters stay.
+ * Owns the sign-in state and runs sync while someone is signed in.
  *
- * Signing in or out never touches IndexedDB: tasks stay on the device either
- * way. Sync (Phase 10) is what will connect the two.
+ * A guest with no saved session and no Google redirect in the URL stays a
+ * guest without the SDK ever loading. Otherwise the SDK loads, restores the
+ * session (finishing the redirect's code exchange), and the sign-in
+ * parameters are removed from the URL. Opened offline with a saved session,
+ * the remembered user stays signed in and changes queue until Supabase can
+ * be reached.
  */
 export function AccountProvider({ children, configured = CONFIGURED, load = loadAccountClient }: AccountProviderProps) {
   const [state, setState] = useState<AccountState>(configured ? { status: 'checking' } : { status: 'off' })
   const [notice, setNotice] = useState<string | null>(null)
   const client = useRef<AccountClient | null>(null)
+  const [remote, setRemote] = useState<Remote | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const [importOffer, setImportOffer] = useState<ImportCandidates | null>(null)
+
+  const userId = state.status === 'signed-in' ? state.user.id : null
+  const sync = useSync(userId, remote, { startOffline: state.status === 'signed-in' && Boolean(state.offline) })
 
   useEffect(() => {
     if (!configured)
       return
     let cancelled = false
     let unsubscribe = () => {}
+
+    const signedIn = (user: AccountUser, offline = false) => {
+      rememberAccount(user)
+      setState({ status: 'signed-in', user, ...(offline ? { offline } : {}) })
+    }
+    /** Offline with a saved session: carry on as the remembered user. */
+    const restoreOffline = () => {
+      const remembered = mayHaveSession(storageKeys()) ? rememberedAccount() : null
+      if (remembered)
+        setState({ status: 'signed-in', user: remembered, offline: true })
+      return remembered !== null
+    }
 
     async function connect() {
       const search = window.location.search
@@ -62,7 +87,8 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
         if (cancelled)
           return
         client.current = loaded
-        unsubscribe = loaded.onChange(user => setState(user ? { status: 'signed-in', user } : { status: 'guest' }))
+        setRemote(loaded.remote)
+        unsubscribe = loaded.onChange(user => (user ? signedIn(user) : setState({ status: 'guest' })))
         const failed = callbackError(search)
         const { user, error } = await loaded.currentUser()
         const clean = withoutAuthParams(window.location.href)
@@ -72,7 +98,7 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
           return
         const callback = isAuthCallback(search)
         if (user) {
-          setState({ status: 'signed-in', user })
+          signedIn(user)
           if (callback)
             setNotice(`Signed in as ${user.fullName ?? user.email ?? 'you'}`)
         }
@@ -83,12 +109,15 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
           setState({ status: 'guest' })
           setNotice(`Sign-in didn't finish: ${failed ?? error ?? 'Google didn\'t confirm it'}. Try signing in again.`)
         }
-        else {
-          setState(error ? { status: 'unavailable', message: UNREACHABLE } : { status: 'guest' })
+        else if (!error) {
+          setState({ status: 'guest' })
+        }
+        else if (!restoreOffline()) {
+          setState({ status: 'unavailable', message: UNREACHABLE })
         }
       }
       catch {
-        if (!cancelled)
+        if (!cancelled && !restoreOffline())
           setState({ status: 'unavailable', message: UNREACHABLE })
       }
     }
@@ -99,6 +128,32 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
       unsubscribe()
     }
   }, [configured, load, attempt])
+
+  // Signed in offline: once the network is back, confirm the session for real.
+  const offline = state.status === 'signed-in' && state.offline === true
+  useEffect(() => {
+    if (!offline)
+      return
+    const onOnline = () => setAttempt(n => n + 1)
+    window.addEventListener('online', onOnline)
+    return () => window.removeEventListener('online', onOnline)
+  }, [offline])
+
+  // The first-sign-in offer: once per account per device, when this device
+  // has guest tasks of its own (samples alone don't prompt).
+  const candidates = useLiveQuery(() => (userId ? importCandidates() : undefined), [userId])
+  useEffect(() => {
+    if (!userId || !candidates || candidates.own === 0)
+      return
+    let cancelled = false
+    void getDb().meta.get(importOfferedKey(userId)).then((answered) => {
+      if (!cancelled && !answered)
+        setImportOffer(candidates)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [userId, candidates])
 
   const ensureClient = useCallback(async () => {
     client.current ??= await load()
@@ -120,17 +175,36 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     }
   }, [ensureClient])
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async ({ force = false } = {}): Promise<SignOutResult> => {
     const loaded = client.current
-    if (!loaded)
-      return null
-    const error = await loaded.signOut()
-    if (error)
-      return `Couldn't sign out: ${error}`
+    if (!userId)
+      return { kind: 'done' }
+    if (!force) {
+      try {
+        if (loaded)
+          await pushAll({ db: getDb(), remote: loaded.remote, userId })
+      }
+      catch {
+        // Offline or unavailable: what's left is counted below.
+      }
+      const count = await unsyncedCount(userId)
+      if (count > 0)
+        return { kind: 'unsynced', count }
+    }
+    if (loaded) {
+      const error = await loaded.signOut()
+      if (error)
+        return { kind: 'error', message: `Couldn't sign out: ${error}` }
+    }
+    const kept = await evictSignedOutUser(userId)
+    forgetRememberedAccount()
     setState({ status: 'guest' })
-    setNotice('Signed out. Your tasks are still on this device.')
-    return null
-  }, [])
+    setImportOffer(null)
+    setNotice(kept > 0
+      ? `Signed out. ${kept} unsynced change${kept === 1 ? ' stays' : 's stay'} on this device and will sync next time you sign in.`
+      : 'Signed out. Your account\'s tasks were removed from this device; guest tasks are still here.')
+    return { kind: 'done' }
+  }, [userId])
 
   const deleteAccount = useCallback(async (expectedUserId: string) => {
     const loaded = client.current
@@ -139,10 +213,14 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     const error = await loaded.deleteAccount(expectedUserId)
     if (error)
       return `Your account wasn't deleted: ${error}`
-    // The user no longer exists, so this only clears the local session.
+    // The user no longer exists, so this only clears the local session; the
+    // account's rows can never sync again, so they leave this device too.
     await loaded.signOut()
+    await forgetUser(expectedUserId)
+    forgetRememberedAccount()
     setState({ status: 'guest' })
-    setNotice('Your account and everything stored with it were deleted. Tasks on this device are still here.')
+    setImportOffer(null)
+    setNotice('Your account and everything stored with it were deleted. Guest tasks on this device are still here.')
     return null
   }, [])
 
@@ -151,9 +229,35 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     setAttempt(n => n + 1)
   }, [])
 
+  const openImport = useCallback(() => {
+    void importCandidates().then(setImportOffer)
+  }, [])
+
+  const syncNow = sync.syncNow
+  const answerImport = useCallback(async (accept: boolean, includeSamples: boolean) => {
+    if (!userId)
+      return null
+    try {
+      if (accept) {
+        const added = await importGuestTasks(userId, { includeSamples })
+        setNotice(`Added ${added} task${added === 1 ? '' : 's'} from this device to your account.`)
+        void syncNow()
+      }
+      else {
+        await declineImport(userId)
+      }
+      setImportOffer(null)
+      return null
+    }
+    catch {
+      return 'That couldn\'t be saved. Try again.'
+    }
+  }, [userId, syncNow])
+
+  const canImport = Boolean(candidates && candidates.own + candidates.samples > 0)
   const value = useMemo<Account>(
-    () => ({ state, notice, signIn, signOut, deleteAccount, retry }),
-    [state, notice, signIn, signOut, deleteAccount, retry],
+    () => ({ state, notice, sync: userId ? sync.status : null, signIn, signOut, deleteAccount, retry, importOffer, canImport, openImport, answerImport }),
+    [state, notice, userId, sync.status, signIn, signOut, deleteAccount, retry, importOffer, canImport, openImport, answerImport],
   )
   return <AccountContext value={value}>{children}</AccountContext>
 }

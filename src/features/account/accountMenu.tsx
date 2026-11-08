@@ -1,6 +1,7 @@
 'use client'
 
 import type { SignInMethod } from './config'
+import type { SyncStatus } from '@/features/tasks/sync/useSync'
 import { CircleUser, X } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useId, useRef, useState } from 'react'
@@ -11,14 +12,53 @@ const METHOD_LABELS: Record<SignInMethod, string> = {
   google: 'Continue with Google',
 }
 
+const SYNC_LABELS: Record<SyncStatus, string> = {
+  'syncing': 'Syncing…',
+  'synced': 'Synced',
+  'offline': 'Offline',
+  'unavailable': 'Sync paused',
+  'signin-needed': 'Sign in again',
+}
+
+const SYNC_EXPLAINED: Record<SyncStatus, string> = {
+  'syncing': 'Syncing your tasks with your account.',
+  'synced': 'Your tasks are synced with your account.',
+  'offline': 'You\'re offline. Changes are saved on this device and sync when you\'re back online.',
+  'unavailable': 'Your account can\'t be reached right now. Changes are saved on this device and sync when it\'s back.',
+  'signin-needed': 'Your session has ended. Sign in again to sync; your changes are kept on this device until then.',
+}
+
+/** One native <dialog>, opened and closed from React state, that hands focus back when it closes. */
+function useDialog(open: boolean, returnFocus?: React.RefObject<HTMLElement | null>) {
+  const ref = useRef<HTMLDialogElement>(null)
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    const dialog = ref.current
+    if (!dialog)
+      return
+    if (open && !dialog.open)
+      dialog.showModal()
+    else if (!open && dialog.open)
+      dialog.close()
+    if (wasOpen.current && !open)
+      returnFocus?.current?.focus()
+    wasOpen.current = open
+  }, [open, returnFocus])
+  return ref
+}
+
+const DIALOG_CLASS = 'fixed inset-x-0 bottom-0 top-auto m-0 w-full max-w-none rounded-t-2xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl backdrop:bg-black/40 md:inset-0 md:m-auto md:h-fit md:max-w-md md:rounded-2xl'
+const PRIMARY = 'min-h-11 rounded-lg bg-gray-900 px-4 font-medium text-white hover:bg-gray-700 disabled:opacity-60'
+const SECONDARY = 'min-h-11 rounded-lg px-4 font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 disabled:opacity-60'
+
 /**
- * The header's account control: "Sign in" for a guest, the account's name
- * when signed in, "Accounts unavailable" when Supabase can't be reached.
- * Each opens one native <dialog> (focus trap, Escape, inert page) whose
- * content follows the state. Renders nothing in a guest-only build.
+ * The header's account control: "Sign in" for a guest; the account's name and
+ * sync state when signed in; "Accounts unavailable" when Supabase can't be
+ * reached. Each opens one native <dialog> (focus trap, Escape, inert page)
+ * whose content follows the state. Renders nothing in a guest-only build.
  */
 export function AccountMenu() {
-  const { state, notice } = useAccount()
+  const { state, notice, sync, importOffer } = useAccount()
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -30,6 +70,7 @@ export function AccountMenu() {
     : state.status === 'unavailable'
       ? 'Accounts unavailable'
       : 'Sign in'
+  const syncLabel = state.status === 'signed-in' && sync ? SYNC_LABELS[sync] : null
 
   return (
     <div className="flex shrink-0 flex-col items-end">
@@ -39,49 +80,44 @@ export function AccountMenu() {
         onClick={() => setOpen(true)}
         disabled={state.status === 'checking'}
         aria-haspopup="dialog"
-        aria-label={state.status === 'signed-in' ? `Account: ${label}` : undefined}
+        aria-label={state.status === 'signed-in' ? `Account: ${label}${syncLabel ? `, ${syncLabel.replace('…', '')}` : ''}` : undefined}
         className="flex min-h-11 items-center gap-2 rounded-full border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-60"
       >
         <CircleUser className="h-5 w-5 text-gray-600" aria-hidden="true" />
         {state.status === 'checking' ? 'Checking…' : label}
+        {syncLabel && (
+          <span className={`text-xs font-normal ${sync === 'synced' || sync === 'syncing' ? 'text-gray-600' : 'text-orange-800'}`}>
+            {`· ${syncLabel}`}
+          </span>
+        )}
       </button>
       {/* Announces sign-in, sign-out and failures; also visible, in plain text. */}
       <p role="status" className="mt-1 max-w-56 text-right text-xs text-gray-600 empty:hidden">{notice}</p>
       <AccountDialog open={open} onClose={() => setOpen(false)} returnFocus={triggerRef} />
+      <ImportDialog open={importOffer !== null} returnFocus={triggerRef} />
     </div>
   )
 }
 
+type View = { kind: 'main' } | { kind: 'confirm-delete', userId: string } | { kind: 'unsynced', userId: string, count: number }
+
 function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose: () => void, returnFocus: React.RefObject<HTMLButtonElement | null> }) {
   const account = useAccount()
-  const { state } = account
+  const { state, sync } = account
   const headingId = useId()
-  const dialogRef = useRef<HTMLDialogElement>(null)
-  // The account the delete confirmation was opened for. The confirmation
-  // shows only while that same account is signed in: if another tab signs in
-  // as someone else, it disappears instead of pointing at them (review 9).
-  const [confirmFor, setConfirmFor] = useState<string | null>(null)
-  const confirmedUser = state.status === 'signed-in' && confirmFor === state.user.id ? state.user : null
-  const confirming = confirmedUser !== null
+  const dialogRef = useDialog(open, returnFocus)
+  const [view, setView] = useState<View>({ kind: 'main' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const wasOpen = useRef(false)
 
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog)
-      return
-    if (open && !dialog.open)
-      dialog.showModal()
-    else if (!open && dialog.open)
-      dialog.close()
-    if (wasOpen.current && !open)
-      returnFocus.current?.focus()
-    wasOpen.current = open
-  }, [open, returnFocus])
+  // A confirmation belongs to the account it was opened for. If another tab
+  // signs in as someone else, it disappears instead of pointing at them
+  // (review 9).
+  const signedInUser = state.status === 'signed-in' ? state.user : null
+  const current: View = view.kind !== 'main' && view.userId !== signedInUser?.id ? { kind: 'main' } : view
 
   function close() {
-    setConfirmFor(null)
+    setView({ kind: 'main' })
     setError(null)
     onClose()
   }
@@ -97,13 +133,38 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
       close()
   }
 
-  const heading = confirming
+  async function signOut(force: boolean) {
+    setBusy(true)
+    setError(null)
+    const result = await account.signOut({ force })
+    setBusy(false)
+    if (result.kind === 'done')
+      close()
+    else if (result.kind === 'unsynced' && signedInUser)
+      setView({ kind: 'unsynced', userId: signedInUser.id, count: result.count })
+    else if (result.kind === 'error')
+      setError(result.message)
+  }
+
+  const heading = current.kind === 'confirm-delete'
     ? 'Delete your account?'
-    : state.status === 'signed-in'
-      ? 'Your account'
-      : state.status === 'unavailable'
-        ? 'Accounts unavailable'
-        : 'Sign in'
+    : current.kind === 'unsynced'
+      ? 'Sign out with unsynced changes?'
+      : signedInUser
+        ? 'Your account'
+        : state.status === 'unavailable'
+          ? 'Accounts unavailable'
+          : 'Sign in'
+
+  const signInButtons = (
+    <div className="flex flex-col gap-2">
+      {SIGN_IN_METHODS.map(method => (
+        <button key={method} type="button" disabled={busy} onClick={() => run(() => account.signIn(method), { closeOnSuccess: false })} className={PRIMARY}>
+          {busy ? 'Opening Google…' : METHOD_LABELS[method]}
+        </button>
+      ))}
+    </div>
+  )
 
   return (
     <dialog
@@ -114,7 +175,7 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
         if (e.target === e.currentTarget)
           close()
       }}
-      className="fixed inset-x-0 bottom-0 top-auto m-0 w-full max-w-none rounded-t-2xl bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] shadow-xl backdrop:bg-black/40 md:inset-0 md:m-auto md:h-fit md:max-w-md md:rounded-2xl"
+      className={DIALOG_CLASS}
     >
       {open && (
         <div>
@@ -125,42 +186,66 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
             </button>
           </div>
 
-          {state.status === 'signed-in' && !confirming && (
+          {signedInUser && current.kind === 'main' && (
             <div className="space-y-4 text-sm text-gray-700">
               <p>
                 Signed in as
                 {' '}
-                <strong className="font-semibold text-gray-900">{state.user.fullName ?? state.user.email}</strong>
-                {state.user.fullName && state.user.email && <span className="block text-gray-600">{state.user.email}</span>}
+                <strong className="font-semibold text-gray-900">{signedInUser.fullName ?? signedInUser.email}</strong>
+                {signedInUser.fullName && signedInUser.email && <span className="block text-gray-600">{signedInUser.email}</span>}
               </p>
-              <p className="rounded-lg bg-orange-50 p-3 text-orange-900">
-                Sync is coming in the next update. For now your tasks stay on this device and aren&apos;t copied to your account.
-              </p>
+              {sync && <p className={`rounded-lg p-3 ${sync === 'synced' || sync === 'syncing' ? 'bg-gray-50 text-gray-800' : 'bg-orange-50 text-orange-900'}`}>{SYNC_EXPLAINED[sync]}</p>}
+              {sync === 'signin-needed' && signInButtons}
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={busy} onClick={() => run(account.signOut)} className="min-h-11 rounded-lg bg-gray-900 px-4 font-medium text-white hover:bg-gray-700 disabled:opacity-60">
-                  Sign out
+                {account.canImport && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      close()
+                      account.openImport()
+                    }}
+                    className={SECONDARY}
+                  >
+                    Import tasks from this device
+                  </button>
+                )}
+                <button type="button" disabled={busy} onClick={() => signOut(false)} className={PRIMARY}>
+                  {busy ? 'Syncing…' : 'Sign out'}
                 </button>
-                <button type="button" disabled={busy} onClick={() => setConfirmFor(state.user.id)} className="min-h-11 rounded-lg px-4 font-medium text-red-700 ring-1 ring-red-300 hover:bg-red-50 disabled:opacity-60">
+                <button type="button" disabled={busy} onClick={() => setView({ kind: 'confirm-delete', userId: signedInUser.id })} className="min-h-11 rounded-lg px-4 font-medium text-red-700 ring-1 ring-red-300 hover:bg-red-50 disabled:opacity-60">
                   Delete account…
                 </button>
               </div>
             </div>
           )}
 
-          {confirmedUser && (
+          {signedInUser && current.kind === 'unsynced' && (
+            <div className="space-y-4 text-sm text-gray-700">
+              <p>
+                {`${current.count} change${current.count === 1 ? ' hasn\'t' : 's haven\'t'} synced yet. ${current.count === 1 ? 'It\'ll' : 'They\'ll'} stay on this device and sync next time you sign in.`}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={busy} onClick={() => signOut(true)} className={PRIMARY}>Sign out anyway</button>
+                <button type="button" disabled={busy} onClick={() => setView({ kind: 'main' })} className={SECONDARY}>Stay signed in</button>
+              </div>
+            </div>
+          )}
+
+          {signedInUser && current.kind === 'confirm-delete' && (
             <div className="space-y-4 text-sm text-gray-700">
               <p>
                 This permanently deletes the account
                 {' '}
-                <strong className="font-semibold text-gray-900">{confirmedUser.email ?? confirmedUser.fullName}</strong>
+                <strong className="font-semibold text-gray-900">{signedInUser.email ?? signedInUser.fullName}</strong>
                 {' '}
-                and everything stored with it on our server. It can&apos;t be undone. Tasks on this device stay here.
+                and everything stored with it, on our server and on this device. It can&apos;t be undone. Guest tasks on this device stay here.
               </p>
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={busy} onClick={() => run(() => account.deleteAccount(confirmedUser.id))} className="min-h-11 rounded-lg bg-red-700 px-4 font-medium text-white hover:bg-red-800 disabled:opacity-60">
+                <button type="button" disabled={busy} onClick={() => run(() => account.deleteAccount(signedInUser.id))} className="min-h-11 rounded-lg bg-red-700 px-4 font-medium text-white hover:bg-red-800 disabled:opacity-60">
                   {busy ? 'Deleting…' : 'Delete my account'}
                 </button>
-                <button type="button" disabled={busy} onClick={() => setConfirmFor(null)} className="min-h-11 rounded-lg px-4 font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50">
+                <button type="button" disabled={busy} onClick={() => setView({ kind: 'main' })} className={SECONDARY}>
                   Cancel
                 </button>
               </div>
@@ -170,21 +255,9 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
           {(state.status === 'guest' || state.status === 'checking') && (
             <div className="space-y-4 text-sm text-gray-700">
               <p>
-                You don&apos;t need an account: your tasks are saved on this device either way. Signing in will let them sync between your devices once sync arrives.
+                You don&apos;t need an account: your tasks are saved on this device either way. Sign in to keep them in sync across your devices.
               </p>
-              <div className="flex flex-col gap-2">
-                {SIGN_IN_METHODS.map(method => (
-                  <button
-                    key={method}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => run(() => account.signIn(method), { closeOnSuccess: false })}
-                    className="min-h-11 rounded-lg bg-gray-900 px-4 font-medium text-white hover:bg-gray-700 disabled:opacity-60"
-                  >
-                    {busy ? 'Opening Google…' : METHOD_LABELS[method]}
-                  </button>
-                ))}
-              </div>
+              {signInButtons}
               <p className="text-xs text-gray-600">
                 Google shares your name, email address and profile picture with this app. See the
                 {' '}
@@ -207,7 +280,7 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
                   account.retry()
                   close()
                 }}
-                className="min-h-11 rounded-lg bg-gray-900 px-4 font-medium text-white hover:bg-gray-700"
+                className={PRIMARY}
               >
                 Try again
               </button>
@@ -215,6 +288,78 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
           )}
 
           {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+        </div>
+      )}
+    </dialog>
+  )
+}
+
+/**
+ * "Add N tasks from this device to your account": offered once per account
+ * per device after signing in, and again from the account menu. Samples are
+ * left out unless ticked; titles too long for the server stay on the device.
+ */
+function ImportDialog({ open, returnFocus }: { open: boolean, returnFocus: React.RefObject<HTMLButtonElement | null> }) {
+  const { importOffer, answerImport } = useAccount()
+  const headingId = useId()
+  const dialogRef = useDialog(open, returnFocus)
+  const [includeSamples, setIncludeSamples] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const samplesId = useId()
+
+  const count = (importOffer?.own ?? 0) + (includeSamples ? importOffer?.samples ?? 0 : 0)
+
+  async function answer(accept: boolean) {
+    setBusy(true)
+    setError(null)
+    const failed = await answerImport(accept, includeSamples)
+    setBusy(false)
+    if (failed)
+      setError(failed)
+  }
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-labelledby={headingId}
+      // Escape: keep them on this device, and don't ask again.
+      onCancel={(e) => {
+        e.preventDefault()
+        void answer(false)
+      }}
+      // Closed any other way while still offered: the same answer.
+      onClose={() => {
+        if (importOffer)
+          void answer(false)
+      }}
+      className={DIALOG_CLASS}
+    >
+      {open && importOffer && (
+        <div className="space-y-4 text-sm text-gray-700">
+          <h2 id={headingId} className="text-lg font-semibold text-gray-900">
+            {`Add ${count} task${count === 1 ? '' : 's'} from this device to your account?`}
+          </h2>
+          <p>They&apos;ll sync to your other devices. If you keep them here instead, you&apos;ll see them whenever you&apos;re signed out.</p>
+          {importOffer.samples > 0 && (
+            <div className="flex items-center gap-2">
+              <input id={samplesId} type="checkbox" checked={includeSamples} onChange={e => setIncludeSamples(e.target.checked)} className="h-5 w-5 accent-orange-600" />
+              <label htmlFor={samplesId}>{`Include the ${importOffer.samples} sample task${importOffer.samples === 1 ? '' : 's'}`}</label>
+            </div>
+          )}
+          {importOffer.tooLong.length > 0 && (
+            <div>
+              <p className="font-medium text-gray-900">Too long to sync, so kept on this device:</p>
+              <ul className="mt-1 list-disc pl-5">
+                {importOffer.tooLong.map(title => <li key={title}>{`${title.slice(0, 60)}…`}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={busy || count === 0} onClick={() => answer(true)} className={PRIMARY}>Add to my account</button>
+            <button type="button" disabled={busy} onClick={() => answer(false)} className={SECONDARY}>Keep them on this device</button>
+          </div>
+          {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
         </div>
       )}
     </dialog>

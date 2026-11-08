@@ -5,6 +5,7 @@ import type { Task, UndoToken } from '../store/types'
 import type { Toast } from './undoToast'
 import { Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useOwnerId } from '@/features/account/accountContext'
 import { useListParams } from '../hooks/useListParams'
 import { useNow } from '../hooks/useNow'
 import { isTypingTarget, useShortcuts } from '../hooks/useShortcuts'
@@ -32,10 +33,12 @@ const UNDO_KEYS = { keyshortcuts: 'Control+Z Meta+Z', hint: 'Ctrl+Z' }
  * phones), search and filters, the date groups and the undo toast.
  */
 export function TaskList() {
-  const tasks = useTasks()
+  // The signed-in user's tasks, else the guest's (null while a saved session is restored).
+  const ownerId = useOwnerId()
+  const tasks = useTasks(ownerId)
   const today = useToday()
   const now = useNow()
-  const categories = useCategories()
+  const categories = useCategories(ownerId)
   const { filter, setFilter, query, setQuery, label: labelParam, setLabel } = useListParams()
   // A label filter pointing at a label that no longer exists means every label.
   const label = labelParam && categories?.some(c => c.id === labelParam) ? labelParam : null
@@ -143,9 +146,10 @@ export function TaskList() {
         setToast({ id: crypto.randomUUID(), message: `Restored ${what}`, durationMs: 3000 })
       }
       else {
-        // Already gone for good (another tab purged it): say so, rather than
+        // Already final: another tab purged it, or the delete has synced (a
+        // synced delete is final on every device). Say so, rather than
         // closing the toast as if it had worked.
-        setToast({ id: crypto.randomUUID(), message: `${what} couldn't be undone: it's already gone.`, durationMs: 4000 })
+        setToast({ id: crypto.randomUUID(), message: `${what} couldn't be undone: the delete is already final.`, durationMs: 4000 })
       }
     }
     catch (err) {
@@ -213,7 +217,7 @@ export function TaskList() {
   async function handleClearSamples() {
     try {
       setError(null)
-      const tokens = await clearSamples()
+      const tokens = await clearSamples({ ownerId: ownerId ?? undefined })
       if (tokens.length) {
         requestFocus({ kind: 'add' })
         const what = `${tokens.length} sample task${tokens.length === 1 ? '' : 's'}`

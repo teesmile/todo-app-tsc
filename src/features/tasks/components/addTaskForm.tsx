@@ -3,6 +3,7 @@
 import type { Ref } from 'react'
 import type { Task } from '../store/types'
 import { useEffect, useId, useRef, useState } from 'react'
+import { useOwnerId } from '@/features/account/accountContext'
 import { useAction } from '../hooks/useAction'
 import { saveErrorMessage } from '../lib/errors'
 import { add, MAX_TITLE_LENGTH } from '../store/repository'
@@ -44,6 +45,7 @@ export function AddTaskForm({ titleRef, today, defaultDue = null, defaultVital =
   const [chosenDue, setChosenDue] = useState<string | null | undefined>(undefined)
   const dueDate = chosenDue === undefined ? defaultDue : chosenDue
   const addTask = useAction(add)
+  const ownerId = useOwnerId()
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
@@ -56,7 +58,7 @@ export function AddTaskForm({ titleRef, today, defaultDue = null, defaultVital =
     event.preventDefault()
     const submitted = { title, chosenDue }
     try {
-      const task = await addTask.run({ title, dueDate, vital: defaultVital, categoryIds: defaultLabel ? [defaultLabel] : [] })
+      const task = await addTask.run({ title, dueDate, vital: defaultVital, categoryIds: defaultLabel ? [defaultLabel] : [] }, { ownerId: ownerId ?? undefined })
       // Clear only what was submitted: text typed while the add was in
       // flight is the next task, not something to throw away.
       const draftLeft = titleNow.current !== submitted.title

@@ -2,6 +2,7 @@
 
 import type { TaskStats } from '../store/stats'
 import { useId } from 'react'
+import { useOwnerId } from '@/features/account/accountContext'
 import { useStats } from '../store/hooks'
 
 const LABELS = ['Done', 'Open', 'Overdue', 'Due today'] as const
@@ -23,7 +24,7 @@ function itemsFor(stats: TaskStats) {
  */
 export function StatsSummary() {
   const headingId = useId()
-  const stats = useStats()
+  const stats = useStats(useOwnerId())
   const items = stats ? itemsFor(stats) : LABELS.map(label => ({ label, value: null, tone: 'text-gray-400' }))
 
   return (

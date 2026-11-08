@@ -6,6 +6,8 @@ export interface LocalSupabase {
   publishableKey: string
   secretKey: string
   jwtSecret: string
+  /** The local stack's own Postgres, for tests that need a raw transaction. */
+  dbUrl: string
 }
 
 declare module 'vitest' {
@@ -30,5 +32,6 @@ export default function setup(project: TestProject) {
     publishableKey: status.PUBLISHABLE_KEY ?? status.ANON_KEY,
     secretKey: status.SECRET_KEY ?? status.SERVICE_ROLE_KEY,
     jwtSecret: status.JWT_SECRET,
+    dbUrl: status.DB_URL,
   })
 }

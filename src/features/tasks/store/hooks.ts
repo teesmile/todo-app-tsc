@@ -16,13 +16,13 @@ import { GUEST } from './types'
  * flashes on load. The query re-runs whenever a write touches the rows it
  * read, including writes from another tab.
  */
-export function useTasks(ownerId: OwnerId = GUEST): Task[] | undefined {
-  return useLiveQuery(() => listTasks({ ownerId }), [ownerId])
+export function useTasks(ownerId: OwnerId | null = GUEST): Task[] | undefined {
+  return useLiveQuery(() => (ownerId === null ? undefined : listTasks({ ownerId })), [ownerId])
 }
 
 /** Live labels, by name; `undefined` while loading. */
-export function useCategories(ownerId: OwnerId = GUEST): Category[] | undefined {
-  return useLiveQuery(() => listCategories({ ownerId }), [ownerId])
+export function useCategories(ownerId: OwnerId | null = GUEST): Category[] | undefined {
+  return useLiveQuery(() => (ownerId === null ? undefined : listCategories({ ownerId })), [ownerId])
 }
 
 export type LegacyImportStatus = 'running' | 'blocked' | 'done' | 'failed'
@@ -101,7 +101,7 @@ export function useLegacyImport(): LegacyImportStatus {
 }
 
 /** Stats over every live task for the owner; `undefined` while loading. */
-export function useStats(ownerId: OwnerId = GUEST): TaskStats | undefined {
+export function useStats(ownerId: OwnerId | null = GUEST): TaskStats | undefined {
   const tasks = useTasks(ownerId)
   const today = useToday()
   return useMemo(() => (tasks ? computeStats(tasks, today) : undefined), [tasks, today])
