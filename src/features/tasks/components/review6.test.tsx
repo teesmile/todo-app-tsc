@@ -112,7 +112,8 @@ describe('3: a draft survives its task moving to another group', () => {
     await waitFor(() => expect(within(screen.getByRole('region', { name: /^Tomorrow/ })).getByRole('textbox', { name: 'Edit "Movable"' })).toBeInTheDocument())
     const field = screen.getByRole('textbox', { name: 'Edit "Movable"' })
     expect(field).toHaveValue('Movable draft')
-    expect(field).toHaveFocus()
+    // The moved editor takes focus in an effect, just after it mounts.
+    await waitFor(() => expect(field).toHaveFocus())
   })
 })
 

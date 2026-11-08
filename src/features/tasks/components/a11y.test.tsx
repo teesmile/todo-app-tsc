@@ -27,7 +27,10 @@ async function renderHome() {
   return user
 }
 
-describe('axe on the main views', () => {
+// axe over the whole page can take more than the default 5s when the full
+// suite runs in parallel: that timeout, not a violation, was the intermittent
+// failure seen in full runs (caught on 2026-11-08).
+describe('axe on the main views', { timeout: 20_000 }, () => {
   it('finds nothing on the home page', async () => {
     await createCategory({ name: 'Work', color: 'blue' })
     await renderHome()
