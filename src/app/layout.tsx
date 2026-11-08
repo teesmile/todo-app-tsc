@@ -1,8 +1,12 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Google_Sans, Inter } from 'next/font/google'
 import '../styles/globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
+// Only for the "Continue with Google" button, as Google's branding guidelines
+// require. Bundled at build time (no request to Google), and not preloaded:
+// a guest downloads it only when the sign-in dialog draws the button.
+const googleSans = Google_Sans({ weight: '500', subsets: ['latin'], display: 'swap', preload: false, variable: '--font-google-sans' })
 
 export const metadata: Metadata = {
   title: 'Todo App',
@@ -19,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={googleSans.variable}>
       <body className={inter.className}>
         {children}
       </body>

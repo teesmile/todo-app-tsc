@@ -2,15 +2,13 @@
 
 import type { SignInMethod } from './config'
 import type { SyncStatus } from '@/features/tasks/sync/useSync'
-import { CircleUser, X } from 'lucide-react'
+import { CircleUserRound, X } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useId, useRef, useState } from 'react'
+import { MAX_NAME_LENGTH, setAccountDisplayName, useAccountDisplayName } from '@/features/tasks/store/profile'
 import { useAccount } from './accountContext'
 import { SIGN_IN_METHODS } from './config'
-
-const METHOD_LABELS: Record<SignInMethod, string> = {
-  google: 'Continue with Google',
-}
+import { GoogleSignInButton } from './googleButton'
 
 const SYNC_LABELS: Record<SyncStatus, string> = {
   'syncing': 'Syncing…',
@@ -81,12 +79,13 @@ export function AccountMenu() {
         disabled={state.status === 'checking'}
         aria-haspopup="dialog"
         aria-label={state.status === 'signed-in' ? `Account: ${label}${syncLabel ? `, ${syncLabel.replace('…', '')}` : ''}` : undefined}
-        className="flex min-h-11 items-center gap-2 rounded-full border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-60"
+        className="flex min-h-11 max-w-[min(15rem,55vw)] items-center gap-2 rounded-full border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-60"
       >
-        <CircleUser className="h-5 w-5 text-gray-600" aria-hidden="true" />
-        {state.status === 'checking' ? 'Checking…' : label}
+        {/* Fixed size and never shrinks: Safari lets an SVG in a tight flex row shrink to nothing. */}
+        <CircleUserRound size={20} strokeWidth={2} className="shrink-0 text-gray-700" aria-hidden="true" />
+        <span className="min-w-0 truncate">{state.status === 'checking' ? 'Checking…' : label}</span>
         {syncLabel && (
-          <span className={`text-xs font-normal ${sync === 'synced' || sync === 'syncing' ? 'text-gray-600' : 'text-orange-800'}`}>
+          <span className={`shrink-0 text-xs font-normal ${sync === 'synced' || sync === 'syncing' ? 'text-gray-600' : 'text-orange-800'}`}>
             {`· ${syncLabel}`}
           </span>
         )}
@@ -156,13 +155,12 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
           ? 'Accounts unavailable'
           : 'Sign in'
 
+  const signInWith = (method: SignInMethod) => run(() => account.signIn(method), { closeOnSuccess: false })
   const signInButtons = (
     <div className="flex flex-col gap-2">
-      {SIGN_IN_METHODS.map(method => (
-        <button key={method} type="button" disabled={busy} onClick={() => run(() => account.signIn(method), { closeOnSuccess: false })} className={PRIMARY}>
-          {busy ? 'Opening Google…' : METHOD_LABELS[method]}
-        </button>
-      ))}
+      {SIGN_IN_METHODS.map(method => (method === 'google'
+        ? <GoogleSignInButton key={method} onClick={() => signInWith(method)} disabled={busy} busy={busy} />
+        : null))}
     </div>
   )
 
@@ -194,6 +192,7 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
                 <strong className="font-semibold text-gray-900">{signedInUser.fullName ?? signedInUser.email}</strong>
                 {signedInUser.fullName && signedInUser.email && <span className="block text-gray-600">{signedInUser.email}</span>}
               </p>
+              <GreetingName userId={signedInUser.id} accountName={signedInUser.firstName} />
               {sync && <p className={`rounded-lg p-3 ${sync === 'synced' || sync === 'syncing' ? 'bg-gray-50 text-gray-800' : 'bg-orange-50 text-orange-900'}`}>{SYNC_EXPLAINED[sync]}</p>}
               {sync === 'signin-needed' && signInButtons}
               <div className="flex flex-wrap gap-2">
@@ -363,5 +362,61 @@ function ImportDialog({ open, returnFocus }: { open: boolean, returnFocus: React
         </div>
       )}
     </dialog>
+  )
+}
+
+/**
+ * The name the greeting uses for a signed-in user. Saved on this device for
+ * this account and wins over the account's name; empty goes back to it.
+ */
+function GreetingName({ userId, accountName }: { userId: string, accountName: string | null }) {
+  const chosen = useAccountDisplayName(userId)
+  const [draft, setDraft] = useState<string | null>(null)
+  const [saved, setSaved] = useState<string | null>(null)
+  const id = useId()
+  const value = draft ?? chosen ?? accountName ?? ''
+
+  async function save(name: string) {
+    const result = await setAccountDisplayName(userId, name)
+    setDraft(null)
+    setSaved(result ? `The greeting now says "${result}".` : `The greeting uses your Google name${accountName ? `, ${accountName}` : ''}, again.`)
+  }
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        void save(value)
+      }}
+      className="space-y-2"
+    >
+      <label htmlFor={`${id}-name`} className="block font-medium text-gray-900">Name in the greeting</label>
+      <div className="flex gap-2">
+        <input
+          id={`${id}-name`}
+          type="text"
+          autoComplete="given-name"
+          value={value}
+          maxLength={MAX_NAME_LENGTH}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            setSaved(null)
+          }}
+          aria-describedby={`${id}-hint`}
+          className="min-h-11 min-w-0 flex-1 rounded-lg border border-gray-300 px-3 focus:outline-none focus:ring-2 focus:ring-orange-500"
+        />
+        <button type="submit" disabled={draft === null} className={SECONDARY}>Save</button>
+      </div>
+      <p id={`${id}-hint`} className="text-xs text-gray-600">
+        Kept on this device. Leave it empty to use your Google name.
+        {chosen && (
+          <>
+            {' '}
+            <button type="button" onClick={() => void save('')} className="font-medium text-orange-800 underline">Use my Google name</button>
+          </>
+        )}
+      </p>
+      <p role="status" className="text-xs text-gray-700 empty:hidden">{saved}</p>
+    </form>
   )
 }

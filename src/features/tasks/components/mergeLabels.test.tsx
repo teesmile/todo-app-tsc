@@ -36,7 +36,7 @@ describe('merging duplicate labels', () => {
     render(<TaskList />)
     await user.click(await screen.findByRole('button', { name: 'Manage labels' }))
     const manager = screen.getByRole('dialog', { name: 'Labels' })
-    const merges = within(manager).getAllByRole('button', { name: 'Merge into the other "Work"' })
+    const merges = await within(manager).findAllByRole('button', { name: 'Merge into the other "Work"' })
     expect(merges).toHaveLength(1)
 
     await user.click(merges[0])

@@ -1,6 +1,7 @@
 import type { TasksDB } from '../store/db'
 import type { Category, Task } from '../store/types'
 import { getDb } from '../store/db'
+import { accountNameKey } from '../store/profile'
 import { GUEST } from '../store/types'
 import { cursorKey, epochKey } from './engine'
 import { SERVER_MAX_TITLE_LENGTH } from './mapping'
@@ -141,6 +142,6 @@ export async function forgetUser(userId: string, { db = getDb() }: { db?: TasksD
   await db.transaction('rw', db.tasks, db.categories, db.meta, async () => {
     await db.tasks.where('ownerId').equals(userId).delete()
     await db.categories.where('ownerId').equals(userId).delete()
-    await db.meta.bulkDelete([cursorKey(userId, 'tasks'), cursorKey(userId, 'categories'), importOfferedKey(userId), epochKey(userId)])
+    await db.meta.bulkDelete([cursorKey(userId, 'tasks'), cursorKey(userId, 'categories'), importOfferedKey(userId), epochKey(userId), accountNameKey(userId)])
   })
 }

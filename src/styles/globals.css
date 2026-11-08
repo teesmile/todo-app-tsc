@@ -167,3 +167,100 @@
     @apply font-medium text-orange-800 underline underline-offset-2;
   }
 }
+
+/*
+ * "Continue with Google", built to Google's branding guidelines
+ * (developers.google.com/identity/branding-guidelines): a 40px pill, 12px in
+ * before the logo, 10px after it, 12px after the text; Google Sans Medium
+ * 14/20; the official G at 20px. Light theme: fill #FFFFFF, 1px inside
+ * stroke #747775, text #1F1F1F. Dark theme (follows the system setting):
+ * fill #131314, stroke #8E918F, text #E3E3E3. Hover, press and disabled
+ * states follow Google's own button.
+ */
+@layer components {
+  .gsi-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 40px;
+    min-width: max-content;
+    padding: 0 12px;
+    overflow: hidden;
+    border: 1px solid #747775;
+    border-radius: 20px;
+    background-color: #ffffff;
+    color: #1f1f1f;
+    font-family: var(--font-google-sans), arial, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.25px;
+    cursor: pointer;
+    transition: background-color 0.218s, border-color 0.218s, box-shadow 0.218s;
+  }
+  .gsi-button-icon {
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+    margin-right: 10px;
+  }
+  .gsi-button-state {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.218s;
+  }
+  .gsi-button-text {
+    position: relative;
+    white-space: nowrap;
+  }
+  .gsi-button:not(:disabled):hover {
+    box-shadow: 0 1px 2px 0 rgb(60 64 67 / 0.3), 0 1px 3px 1px rgb(60 64 67 / 0.15);
+  }
+  .gsi-button:not(:disabled):hover .gsi-button-state {
+    background-color: #303030;
+    opacity: 0.08;
+  }
+  .gsi-button:not(:disabled):active .gsi-button-state {
+    background-color: #303030;
+    opacity: 0.12;
+  }
+  .gsi-button:focus-visible {
+    outline: 2px solid #ea580c;
+    outline-offset: 2px;
+  }
+  .gsi-button:disabled {
+    cursor: default;
+    background-color: rgb(255 255 255 / 0.38);
+    border-color: rgb(31 31 31 / 0.12);
+  }
+  .gsi-button:disabled .gsi-button-icon,
+  .gsi-button:disabled .gsi-button-text {
+    opacity: 0.38;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .gsi-button {
+      border-color: #8e918f;
+      background-color: #131314;
+      color: #e3e3e3;
+    }
+    .gsi-button:not(:disabled):hover .gsi-button-state,
+    .gsi-button:not(:disabled):active .gsi-button-state {
+      background-color: #ffffff;
+    }
+    .gsi-button:disabled {
+      background-color: rgb(19 19 20 / 0.38);
+      border-color: rgb(142 145 143 / 0.12);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gsi-button,
+    .gsi-button-state {
+      transition: none;
+    }
+  }
+}

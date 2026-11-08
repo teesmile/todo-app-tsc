@@ -44,3 +44,36 @@ export async function setDisplayName(name: string, { db = getDb() }: { db?: Task
 export async function skipNamePrompt({ db = getDb() }: { db?: TasksDB } = {}): Promise<void> {
   await db.meta.put({ key: PROMPT_DONE_KEY, value: true })
 }
+
+/** The meta key for the name a signed-in user chose for the greeting, per account. */
+export function accountNameKey(userId: string) {
+  return `accountDisplayName:${userId}`
+}
+
+/**
+ * The greeting name a signed-in user set on this device, or null to use the
+ * account's own name. Undefined while loading.
+ */
+export function useAccountDisplayName(userId: string | null): string | null | undefined {
+  return useLiveQuery(async () => {
+    if (!userId)
+      return null
+    const entry = await getDb().meta.get(accountNameKey(userId))
+    return typeof entry?.value === 'string' ? entry.value : null
+  }, [userId])
+}
+
+/**
+ * Sets the greeting name for a signed-in user on this device; it wins over
+ * the account's name. An empty name clears it, so the account's name is
+ * used again. Kept per account, so it survives signing out and back in, and
+ * a guest's name is untouched.
+ */
+export async function setAccountDisplayName(userId: string, name: string, { db = getDb() }: { db?: TasksDB } = {}): Promise<string | null> {
+  const trimmed = name.trim().slice(0, MAX_NAME_LENGTH)
+  if (trimmed)
+    await db.meta.put({ key: accountNameKey(userId), value: trimmed })
+  else
+    await db.meta.delete(accountNameKey(userId))
+  return trimmed || null
+}
