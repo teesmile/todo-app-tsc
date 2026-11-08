@@ -117,7 +117,8 @@ describe('account menu', () => {
     await user.click(await screen.findByRole('button', { name: /^Account: Toni/ }))
     const dialog = screen.getByRole('dialog', { name: 'Your account' })
     expect(dialog).toHaveTextContent('toni@example.com')
-    expect(dialog).toHaveTextContent('Your tasks are synced with your account')
+    // The first sync starts on sign-in; wait for it to settle.
+    await waitFor(() => expect(dialog).toHaveTextContent('Your tasks are synced with your account'))
     await user.click(within(dialog).getByRole('button', { name: 'Sign out' }))
 
     const signIn = await screen.findByRole('button', { name: 'Sign in' })

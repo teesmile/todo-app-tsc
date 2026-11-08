@@ -45,6 +45,7 @@ export function taskFromServer(row: ServerTask, local?: Task): Task {
     deletedRev: null,
     vital: row.vital ? 1 : 0,
     categoryIds: [...row.category_ids],
+    serverStamp: row.server_updated_at,
   }
 }
 
@@ -72,5 +73,6 @@ export function categoryFromServer(row: ServerCategory, local?: Category): Categ
     createdAt: ms(row.created_at),
     updatedAt: ms(row.updated_at),
     deletedAt: row.deleted_at === null ? null : ms(row.deleted_at),
+    serverStamp: row.server_updated_at,
   }
 }

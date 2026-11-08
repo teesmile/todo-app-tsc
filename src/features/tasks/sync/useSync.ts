@@ -5,7 +5,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getDb } from '../store/db'
 import { unsyncedFingerprint } from './account'
-import { syncNow } from './engine'
+import { SyncCancelledError, syncNow } from './engine'
 import { RemoteError } from './types'
 
 export type SyncStatus = 'syncing' | 'synced' | 'offline' | 'unavailable' | 'signin-needed'
@@ -58,6 +58,9 @@ export function useSync(userId: string | null, remote: Remote | null, { startOff
         retryTimer.current = setTimeout(() => void run(), Math.max(0, retryAt - Date.now()) + 50)
     }
     catch (error) {
+      // Signed out on this device mid-run: nothing failed, there's just no one to sync for.
+      if (error instanceof SyncCancelledError)
+        return
       failures.current += 1
       setStatus(statusFor(error))
       if (!(error instanceof RemoteError && error.kind === 'auth'))

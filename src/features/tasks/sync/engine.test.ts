@@ -286,7 +286,9 @@ describe('signing in and out', () => {
     await sync(a)
 
     expect([...remote.rows.tasks.values()].map(t => t.title)).toEqual(['Mine'])
-    expect(remote.rows.categories.get(label.id)?.name).toBe('Home')
+    // The over-long task staying behind still uses "Home", so the account gets a copy.
+    expect([...remote.rows.categories.values()].map(c => c.name)).toEqual(['Home'])
+    expect((await a.categories.get(label.id))?.ownerId).toBe(GUEST)
     expect(await a.tasks.where('ownerId').equals(GUEST).filter(t => t.title.length > 10_000).count()).toBe(1)
     expect(await a.tasks.where('ownerId').equals(GUEST).filter(t => t.isSample === 1).count()).toBe(5)
   })

@@ -16,6 +16,7 @@ import { focusAfterRemoving } from '../lib/focus'
 import { groupKeyFor, groupTasks } from '../lib/group'
 import { useCategories, useTasks } from '../store/hooks'
 import { clearSamples, purgeGuestTombstones, remove, undoRemove } from '../store/repository'
+import { holdUndo } from '../store/undoHolds'
 import { AddTaskForm } from './addTaskForm'
 import { AddTaskSheet } from './addTaskSheet'
 import { EditDrafts, EditDraftsContext } from './editDrafts'
@@ -88,6 +89,8 @@ export function TaskList() {
   }, [])
   const [error, setError] = useState<unknown>(null)
   const closeToast = useCallback(() => setToast(null), [])
+  // While an Undo is on screen (paused or not), sync doesn't send its deletes.
+  useEffect(() => (toast?.holds ? holdUndo(toast.holds) : undefined), [toast])
 
   // The Undo button sits at the end of the list, which can be dozens of Tab
   // presses away within a six-second window, so Undo also has a key. Inside a
@@ -169,7 +172,7 @@ export function TaskList() {
       if (token) {
         requestFocus(target)
         const what = `"${task.title}"`
-        setToast({ id: crypto.randomUUID(), message: `Deleted ${what}`, action: { label: 'Undo', run: () => undo([token], what), ...UNDO_KEYS } })
+        setToast({ id: crypto.randomUUID(), message: `Deleted ${what}`, action: { label: 'Undo', run: () => undo([token], what), ...UNDO_KEYS }, holds: [token.id] })
       }
     }
     catch (err) {
@@ -221,7 +224,7 @@ export function TaskList() {
       if (tokens.length) {
         requestFocus({ kind: 'add' })
         const what = `${tokens.length} sample task${tokens.length === 1 ? '' : 's'}`
-        setToast({ id: crypto.randomUUID(), message: `Cleared ${what}`, action: { label: 'Undo', run: () => undo(tokens, what), ...UNDO_KEYS } })
+        setToast({ id: crypto.randomUUID(), message: `Cleared ${what}`, action: { label: 'Undo', run: () => undo(tokens, what), ...UNDO_KEYS }, holds: tokens.map(t => t.id) })
       }
     }
     catch (err) {

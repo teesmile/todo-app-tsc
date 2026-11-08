@@ -37,6 +37,12 @@ export interface Task {
   vital: 0 | 1
   /** Ids of the labels on this task (Phase 7). Unknown ids are ignored when shown. */
   categoryIds: string[]
+  /**
+   * The server's `server_updated_at` for the version this row last took from
+   * the server (Phase 10). A pull or acknowledgement only applies a strictly
+   * newer one, so a delayed response can't overwrite a newer synced version.
+   */
+  serverStamp?: string | null
 }
 
 /** A label the user creates (Phase 7). Same sync fields as a task. */
@@ -50,6 +56,8 @@ export interface Category {
   createdAt: number
   updatedAt: number
   deletedAt: number | null
+  /** As on Task: the server version this row last took. */
+  serverStamp?: string | null
 }
 
 export const CATEGORY_COLORS = ['red', 'orange', 'amber', 'green', 'teal', 'blue', 'violet', 'pink'] as const

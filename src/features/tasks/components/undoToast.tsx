@@ -10,6 +10,8 @@ export interface Toast {
   /** One optional button: Undo after a delete, Show all for a hidden task. */
   action?: { label: string, run: () => void, keyshortcuts?: string, hint?: string }
   durationMs?: number
+  /** Deleted task ids whose Undo this toast offers: sync holds them while it's on screen. */
+  holds?: string[]
 }
 
 /**
