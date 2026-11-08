@@ -192,7 +192,8 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
                 <strong className="font-semibold text-gray-900">{signedInUser.fullName ?? signedInUser.email}</strong>
                 {signedInUser.fullName && signedInUser.email && <span className="block text-gray-600">{signedInUser.email}</span>}
               </p>
-              <GreetingName userId={signedInUser.id} accountName={signedInUser.firstName} />
+              {/* Keyed by account: another tab signing in as someone else starts a fresh editor, so a draft can't be saved to them. */}
+              <GreetingName key={signedInUser.id} userId={signedInUser.id} accountName={signedInUser.firstName} />
               {sync && <p className={`rounded-lg p-3 ${sync === 'synced' || sync === 'syncing' ? 'bg-gray-50 text-gray-800' : 'bg-orange-50 text-orange-900'}`}>{SYNC_EXPLAINED[sync]}</p>}
               {sync === 'signin-needed' && signInButtons}
               <div className="flex flex-wrap gap-2">

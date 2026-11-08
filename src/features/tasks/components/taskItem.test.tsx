@@ -38,7 +38,8 @@ describe('taskItem', () => {
     await user.type(field, 'Buy oat milk and bread{Enter}')
 
     await waitFor(async () => expect((await stored(task.id)).title).toBe('Buy oat milk and bread'))
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    // The editor closes when the save's promise resumes in the component, a tick after the write lands.
+    await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument())
     // The save resolves outside act(), so the focus effect can land a tick later.
     await waitFor(() => expect(screen.getByRole('button', { name: /^Edit "/ })).toHaveFocus())
   })

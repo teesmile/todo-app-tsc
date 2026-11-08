@@ -1,6 +1,6 @@
 import type { AccountClient } from './client'
 import type { AccountUser } from './session'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AppHeader } from '@/features/tasks/components/appHeader'
@@ -118,5 +118,30 @@ describe('the greeting name for a signed-in user', () => {
     await setAccountDisplayName(toni.id, 'Tee')
     await forgetUser(toni.id)
     expect(await getDb().meta.get(accountNameKey(toni.id))).toBeUndefined()
+  })
+})
+
+describe('the greeting name stays with its account', () => {
+  it('drops an unsaved draft when another tab signs in as someone else, instead of saving it to them', async () => {
+    const ada: AccountUser = { id: '55555555-5555-4555-8555-555555555555', email: 'ada@example.com', firstName: 'Ada', fullName: 'Ada Lovelace' }
+    let switchUser: (u: AccountUser | null) => void = () => {}
+    const c: AccountClient = { ...client(toni), onChange: (cb) => {
+      switchUser = cb
+      return () => {}
+    } }
+    window.localStorage.setItem('sb-test-auth-token', '{}')
+    const events = userEvent.setup()
+    render(<AccountProvider configured load={async () => c}><AppHeader /></AccountProvider>)
+    await events.click(await screen.findByRole('button', { name: /^Account: Toni/ }))
+    const field = screen.getByRole('textbox', { name: 'Name in the greeting' })
+    await events.clear(field)
+    await events.type(field, 'Tee')
+
+    act(() => switchUser(ada))
+
+    const now = await screen.findByRole('textbox', { name: 'Name in the greeting' })
+    await waitFor(() => expect(now).toHaveValue('Ada'))
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(await getDb().meta.get(accountNameKey(ada.id))).toBeUndefined()
   })
 })
