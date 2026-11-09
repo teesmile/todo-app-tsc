@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { LegalPage } from '@/components/legalPage'
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/terms' },
   title: 'Terms · Todo App',
   description: 'The plain-language terms for using Todo App.',
 }

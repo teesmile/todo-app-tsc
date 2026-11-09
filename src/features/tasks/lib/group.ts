@@ -49,19 +49,24 @@ export function groupKeyFor(task: Task, today: string, tomorrow = nextDay(today)
 }
 
 /**
- * Newest added first, ties broken by id so the order is stable. Every group
- * uses it, so a task you just added is always at the top of its group
+ * Newest added first, ties broken by id so the order is stable. The open
+ * groups use it, so a task you just added is always at the top of its group
  * (owner, 2026-11-09; it replaced Vital first, then due date).
  */
 function byNewest(a: Task, b: Task) {
   return b.createdAt - a.createdAt || a.id.localeCompare(b.id)
 }
 
+/** Done in the Due date view: most recently completed first (owner, 2026-11-09). */
+function byMostRecentlyDone(a: Task, b: Task) {
+  return (b.completedAt ?? 0) - (a.completedAt ?? 0) || a.id.localeCompare(b.id)
+}
+
 /**
  * Splits live tasks into the six groups (decision 4), always in the same
  * order, including empty ones. Completed tasks always go to Done, even if
- * overdue. Inside every group, newest added first, so a task you just added
- * shows at the top of its group. Pure: `today` is passed in, so midnight
+ * overdue. Inside the open groups, newest added first, so a task you just
+ * added shows at the top of its group; Done is most recently completed first. Pure: `today` is passed in, so midnight
  * and month ends are testable without a fake clock.
  */
 export function groupTasks(tasks: Task[], today: string): TaskGroup[] {
@@ -73,7 +78,7 @@ export function groupTasks(tasks: Task[], today: string): TaskGroup[] {
   return ORDER.map(({ key, label }) => ({
     key,
     label,
-    tasks: buckets.get(key)!.sort(byNewest),
+    tasks: buckets.get(key)!.sort(key === 'done' ? byMostRecentlyDone : byNewest),
   }))
 }
 

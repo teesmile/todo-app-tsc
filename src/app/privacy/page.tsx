@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { LegalPage } from '@/components/legalPage'
 
 export const metadata: Metadata = {
+  alternates: { canonical: '/privacy' },
   title: 'Privacy · Todo App',
   description: 'What Todo App keeps on your device, what it stores when you sign in, and how to delete it.',
 }

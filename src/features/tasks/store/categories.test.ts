@@ -21,14 +21,14 @@ describe('vital', () => {
     expect(filterTasks([a, b, c], { filter: 'vital', query: 'call' }, today)).toEqual([a])
   })
 
-  it('no longer lifts a vital task above newer ones: every group is newest added first (owner, 2026-11-09)', () => {
+  it('no longer lifts a vital task above newer ones; Done stays most recently completed first (owner, 2026-11-09)', () => {
     const newer = task({ dueDate: today, createdAt: 1 })
     const vital = task({ dueDate: today, createdAt: 0, vital: 1 })
     const doneVital = task({ completed: true, completedAt: 5, vital: 1, createdAt: 3 })
     const doneLater = task({ completed: true, completedAt: 9, createdAt: 2 })
     const groups = Object.fromEntries(groupTasks([newer, vital, doneVital, doneLater], today).map(g => [g.key, g.tasks]))
     expect(groups.today).toEqual([newer, vital])
-    expect(groups.done).toEqual([doneVital, doneLater])
+    expect(groups.done).toEqual([doneLater, doneVital])
   })
 
   it('stores the flag as 0 or 1', async () => {

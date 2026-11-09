@@ -88,7 +88,7 @@ describe('groupTasks', () => {
 describe('task order (owner, 2026-11-09): a task just added is at the top', () => {
   const today = '2026-11-09'
 
-  it('sorts every group newest-added first, Vital and due date no longer ahead of it', () => {
+  it('sorts the open groups newest-added first (Vital and due date no longer ahead), and Done most recently completed first', () => {
     const olderVital = task({ dueDate: '2026-11-20', vital: 1, createdAt: 100 })
     const olderSooner = task({ dueDate: '2026-11-12', createdAt: 200 })
     const newest = task({ dueDate: '2026-11-25', createdAt: 300 })
@@ -96,7 +96,8 @@ describe('task order (owner, 2026-11-09): a task just added is at the top', () =
     const doneNew = task({ completed: true, completedAt: 500, createdAt: 20 })
     const groups = groupTasks([olderVital, olderSooner, newest, doneOld, doneNew], today)
     expect(groups.find(g => g.key === 'upcoming')!.tasks.map(t => t.id)).toEqual([newest.id, olderSooner.id, olderVital.id])
-    expect(groups.find(g => g.key === 'done')!.tasks.map(t => t.id)).toEqual([doneNew.id, doneOld.id])
+    // Owner, 2026-11-09: Done keeps most recently completed first.
+    expect(groups.find(g => g.key === 'done')!.tasks.map(t => t.id)).toEqual([doneOld.id, doneNew.id])
   })
 
   it('"Newest" is one list: open tasks newest-added first, then completed ones, newest-added first', () => {
