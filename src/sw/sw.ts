@@ -1,3 +1,4 @@
+import { ACTIVE_KEY, CACHE_PREFIX, cachesToDelete, META_CACHE } from './caches'
 import { acceptForPrecache, routeFor } from './routing'
 
 /**
@@ -7,8 +8,9 @@ import { acceptForPrecache, routeFor } from './routing'
  *
  * - Install: precache every file the static export emits, so the app works
  *   offline from the first visit, including chunks never opened yet.
- * - Activate: keep this version's cache and the one before it (tabs that
- *   haven't reloaded yet still need its files); delete older ones.
+ * - Activate: keep this version's cache and the one that was active before
+ *   it (tabs that haven't reloaded yet still need its files); delete the
+ *   rest, failed installs included (caches.ts).
  * - Fetch: see routing.ts. Other origins (Supabase, Google) are never
  *   intercepted, so no token or task row ever lands in a cache.
  * - Updates: a new version waits until the page asks it to take over
@@ -33,7 +35,6 @@ interface Worker {
 }
 
 const worker = globalThis as unknown as Worker
-const CACHE_PREFIX = 'todo-app-'
 const CACHE = `${CACHE_PREFIX}${__VERSION__}`
 const PRECACHED = new Set(__PRECACHE__)
 
@@ -41,9 +42,10 @@ worker.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE)
     // One by one rather than addAll: the 404 page arrives with status 404.
-    // Any other failure rejects, so the install fails and the old version
-    // stays in charge rather than a half-filled cache.
-    await Promise.all(__PRECACHE__.map(async (url) => {
+    // Any other failure fails the install, so the old version stays in
+    // charge. Every fetch settles first, then the half-filled cache is
+    // deleted, so it can't be mistaken for a version later (review 19).
+    const results = await Promise.allSettled(__PRECACHE__.map(async (url) => {
       // `reload`: a fresh copy, never one from the HTTP cache.
       const response = await fetch(new Request(url, { cache: 'reload' }))
       if (!acceptForPrecache(url, response.status))
@@ -51,16 +53,23 @@ worker.addEventListener('install', (event) => {
       // A followed redirect can't answer a navigation, so store a plain copy.
       await cache.put(url, response.redirected ? new Response(response.body, response) : response)
     }))
+    const failed = results.find(result => result.status === 'rejected')
+    if (failed) {
+      await caches.delete(CACHE)
+      throw failed.reason
+    }
   })())
 })
 
 worker.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    // keys() lists caches oldest first, so the last other one is the
-    // version this replaces.
-    const older = (await caches.keys()).filter(name => name.startsWith(CACHE_PREFIX) && name !== CACHE)
-    for (const name of older.slice(0, -1))
+    // Keep this version and the one that was active before it (see
+    // caches.ts), then record this one as active.
+    const meta = await caches.open(META_CACHE)
+    const previous = await (await meta.match(ACTIVE_KEY))?.text() ?? null
+    for (const name of cachesToDelete(await caches.keys(), CACHE, previous))
       await caches.delete(name)
+    await meta.put(ACTIVE_KEY, new Response(CACHE))
     // The first install controls the open page at once, so it works offline
     // without a reload. Later versions only activate when the page asked.
     await worker.clients.claim()
