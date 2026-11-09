@@ -144,8 +144,12 @@ describe('the greeting name lives on the account', () => {
 
     // Changed elsewhere meanwhile.
     await auth.client(MAIN).setDisplayName('Tony')
-    act(() => document.dispatchEvent(new Event('visibilitychange')))
-    await waitFor(() => expect(heading()).toHaveTextContent(/, Tony$/))
+    // Coming back to the tab. The listener is added by an effect just after
+    // the first render, so keep "coming back" until it has been heard.
+    await waitFor(() => {
+      act(() => document.dispatchEvent(new Event('visibilitychange')))
+      expect(heading()).toHaveTextContent(/, Tony$/)
+    })
   })
 
   it('goes back to the Google name with "Use my Google name"', async () => {

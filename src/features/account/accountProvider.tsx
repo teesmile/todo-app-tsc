@@ -162,6 +162,9 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
               return
             applyUser(fresh, op)
             await migrateDeviceName(loaded, fresh)
+          }).catch(() => {
+            // Offline, or storage unavailable: nothing changes, and the next
+            // start or tab-show tries again. Never an unhandled rejection.
           })
         }
         else if (callback) {
@@ -212,6 +215,8 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
       void client.current.refreshUser().then((fresh) => {
         if (fresh?.id === userId)
           applyUser(fresh, op)
+      }).catch(() => {
+        // A failed refresh leaves the name as it was; the next one retries.
       })
     }
     document.addEventListener('visibilitychange', onVisible)
