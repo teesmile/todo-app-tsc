@@ -17,9 +17,9 @@ export type SignInMethod = 'google'
  * THE SWITCH for sign-in methods: the dialog shows one button per entry.
  *
  * Email is off until custom SMTP exists, because Supabase's built-in mailer
- * only delivers to the project's team. Turning it on is the checklist in
- * docs/plan.md, Phase 9, "Turning on email sign-in": configure SMTP, set
- * `[auth.email] enabled = true` in supabase/config.toml and push it, build
- * the email form, then add 'email' to SignInMethod and to this list.
+ * only delivers to the project's team. Turning it on: configure custom SMTP,
+ * set `[auth.email] enabled = true` in supabase/config.toml and push it,
+ * build the email form, say in /privacy what an email account stores, then
+ * add 'email' to SignInMethod and to this list.
  */
 export const SIGN_IN_METHODS: readonly SignInMethod[] = ['google']

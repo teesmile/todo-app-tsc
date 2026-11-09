@@ -69,8 +69,4 @@ Supabase's free plan pauses a project after 7 days without database activity, an
 
 1. **The warning email arrives.** On GitHub, open Actions → *Keep Supabase awake* and check its last run. It calls `public.ping()` every 3 days. If it hasn't run, press **Run workflow**. GitHub disables scheduled workflows after 60 days without repository activity, so re-enable it if it's switched off. If it fails, check the `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` repository variables.
 2. **The project is already paused.** In the Supabase dashboard, open the project and choose **Resume project**. It comes back with its data and settings in a few minutes. Supabase keeps a paused free project restorable only for a limited time, so resume it soon: the dashboard shows the deadline.
-3. **It paused even though the ping ran.** That means Supabase isn't counting a table-free query as activity. Switch the ping to a one-row read from a small `public.heartbeat` table, as `docs/plan.md` (Phase 9) describes.
-
-## The reasoning
-
-Every non-trivial choice, including each adversarial code review and how it was answered, is in [`docs/decisions.md`](docs/decisions.md). The phased plan is [`docs/plan.md`](docs/plan.md), and the audit it started from is [`docs/audit.md`](docs/audit.md).
+3. **It paused even though the ping ran.** That means Supabase isn't counting a table-free query as activity. Add a one-row `public.heartbeat` table readable by `anon`, in a new migration, and point the workflow at a read of that row instead of `public.ping()`.
