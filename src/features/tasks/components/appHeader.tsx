@@ -1,6 +1,7 @@
 'use client'
 
 import { useId, useState } from 'react'
+import { Wordmark } from '@/components/wordmark'
 import { useAccount } from '@/features/account/accountContext'
 import { AccountMenu } from '@/features/account/accountMenu'
 import { useNow } from '../hooks/useNow'
@@ -29,13 +30,14 @@ export function AppHeader() {
     <header className="border-b border-gray-200 bg-white">
       <div className="mx-auto max-w-5xl px-4 py-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold text-gray-900 md:text-2xl">
-              {now ? `${greetingFor(now.getHours())}${name ? `, ${name}` : ''}` : 'Your tasks'}
-            </h1>
-            <p className="mt-0.5 text-sm text-gray-600">{now ? formatLongDate(now) : ' '}</p>
-          </div>
+          <Wordmark />
           <AccountMenu />
+        </div>
+        <div className="mt-2 min-w-0">
+          <h1 className="text-xl font-bold text-gray-900 md:text-2xl">
+            {now ? `${greetingFor(now.getHours())}${name ? `, ${name}` : ''}` : 'Your tasks'}
+          </h1>
+          <p className="mt-0.5 text-sm text-gray-600">{now ? formatLongDate(now) : ' '}</p>
         </div>
         {askName && <NamePrompt />}
       </div>

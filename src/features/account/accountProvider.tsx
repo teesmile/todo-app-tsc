@@ -279,6 +279,23 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     }
   }, [ensureClient])
 
+  const signInWithIdToken = useCallback(async (token: string, rawNonce: string) => {
+    try {
+      const loaded = await ensureClient()
+      const { user, error } = await loaded.signInWithIdToken(token, rawNonce)
+      if (error || !user)
+        return `Sign-in didn't finish: ${error ?? 'Google didn\'t confirm it'}. Try again.`
+      setNotice(`Signed in as ${[user.fullName, user.email && `(${user.email})`].filter(Boolean).join(' ') || 'you'}`)
+      // Connect again: subscribes to auth changes, sets up sync and
+      // remembers the account, exactly as after the redirect flow.
+      setAttempt(n => n + 1)
+      return null
+    }
+    catch {
+      return UNREACHABLE
+    }
+  }, [ensureClient])
+
   const signOut = useCallback(async ({ force = false } = {}): Promise<SignOutResult> => {
     const loaded = client.current
     if (!userId)
@@ -376,8 +393,8 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
 
   const canImport = Boolean(candidates && candidates.own + candidates.samples > 0)
   const value = useMemo<Account>(
-    () => ({ state, notice, sync: userId ? sync.status : null, signIn, signOut, deleteAccount, retry, importOffer, canImport, openImport, answerImport, setGreetingName }),
-    [state, notice, userId, sync.status, signIn, signOut, deleteAccount, retry, importOffer, canImport, openImport, answerImport, setGreetingName],
+    () => ({ state, notice, sync: userId ? sync.status : null, signIn, signInWithIdToken, signOut, deleteAccount, retry, importOffer, canImport, openImport, answerImport, setGreetingName }),
+    [state, notice, userId, sync.status, signIn, signInWithIdToken, signOut, deleteAccount, retry, importOffer, canImport, openImport, answerImport, setGreetingName],
   )
   return <AccountContext value={value}>{children}</AccountContext>
 }

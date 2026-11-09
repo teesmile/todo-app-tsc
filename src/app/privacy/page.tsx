@@ -71,7 +71,8 @@ export default function PrivacyPage() {
         <li>
           <strong>Google</strong>
           {' '}
-          handles the sign-in itself.
+          handles the sign-in itself. When you open &ldquo;Sign in&rdquo;, the page loads Google&apos;s sign-in button
+          from Google, so Google sees that request; if you never open it, nothing is loaded from Google.
         </li>
         <li>
           <strong>Vercel</strong>

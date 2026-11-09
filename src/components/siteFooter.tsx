@@ -7,7 +7,10 @@ import Link from 'next/link'
 export function SiteFooter({ className = '' }: { className?: string }) {
   return (
     <footer className={`mx-auto max-w-5xl px-4 text-sm text-gray-600 ${className}`}>
-      <p>A task list that keeps your tasks on your device. Signing in with Google is optional.</p>
+      <p>
+        <strong className="font-semibold text-gray-800">Todo App</strong>
+        {' by Anthony Ugwuja. A task list that keeps your tasks on your device; signing in with Google is optional.'}
+      </p>
       <nav aria-label="Legal" className="mt-2">
         <ul className="flex flex-wrap gap-x-4">
           <li>

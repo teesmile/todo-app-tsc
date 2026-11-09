@@ -16,8 +16,14 @@ export interface AccountClient {
   currentUser: () => Promise<{ user: AccountUser | null, error: string | null }>
   /** Calls back on sign-in, sign-out and token refresh. Returns an unsubscribe. */
   onChange: (callback: (user: AccountUser | null) => void) => () => void
-  /** Navigates to Google. Only returns if it couldn't start. */
+  /** Navigates to Google. Only returns if it couldn't start. The fallback when Google's own button can't load. */
   signInWithGoogle: (redirectTo: string) => Promise<string | null>
+  /**
+   * Signs in with the ID token Google's own button returned, and the raw
+   * nonce whose hash Google sealed into it. No navigation. Resolves with the
+   * signed-in user or an error message.
+   */
+  signInWithIdToken: (token: string, rawNonce: string) => Promise<{ user: AccountUser | null, error: string | null }>
   /** Ends this device's session only; other devices stay signed in. */
   signOut: () => Promise<string | null>
   /**
@@ -64,6 +70,10 @@ export function accountClientFrom(supabase: SupabaseClient): AccountClient {
     async signInWithGoogle(redirectTo) {
       const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
       return error?.message ?? null
+    },
+    async signInWithIdToken(token, rawNonce) {
+      const { data, error } = await supabase.auth.signInWithIdToken({ provider: 'google', token, nonce: rawNonce })
+      return { user: data.user ? accountUserFrom(data.user) : null, error: error?.message ?? null }
     },
     async signOut() {
       const { error } = await supabase.auth.signOut({ scope: 'local' })

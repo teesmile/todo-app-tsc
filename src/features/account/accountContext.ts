@@ -33,6 +33,8 @@ export interface Account {
   sync: SyncStatus | null
   /** Starts a sign-in. Resolves with an error message if it couldn't start (success navigates away). */
   signIn: (method: SignInMethod) => Promise<string | null>
+  /** Signs in with the ID token from Google's own button (no navigation). Resolves with an error message, or null. */
+  signInWithIdToken: (token: string, rawNonce: string) => Promise<string | null>
   /**
    * Pushes first. With changes still unsynced it stops and reports them,
    * unless `force`; then they stay on the device, hidden, for next time.
@@ -61,6 +63,7 @@ export const AccountContext = createContext<Account>({
   notice: null,
   sync: null,
   signIn: noop,
+  signInWithIdToken: noop,
   signOut: async () => ({ kind: 'done' }),
   deleteAccount: noop,
   retry: () => {},

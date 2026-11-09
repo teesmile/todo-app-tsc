@@ -24,6 +24,7 @@ function client(remote: FakeRemote, overrides: Partial<AccountClient> = {}): Acc
     currentUser: async () => ({ user: toni, error: null }),
     onChange: () => () => {},
     signInWithGoogle: async () => null,
+    signInWithIdToken: async () => ({ user: null, error: null }),
     signOut: async () => null,
     deleteAccount: async () => null,
     setDisplayName: async () => ({ user: null, error: null }),

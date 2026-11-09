@@ -45,6 +45,7 @@ describe('privacy and terms', () => {
     expect(text()).toMatch(/your tasks and labels .* are synced with your account and stored with it in London/)
     expect(text()).toMatch(/changes that haven't synced yet stay on it, hidden, until you sign in again/)
     expect(text()).toMatch(/the name you choose for the greeting if you set one/)
+    expect(text()).toMatch(/When you open “Sign in”, the page loads Google's sign-in button from Google/)
     expect(screen.getByRole('link', { name: 'anthonyugwujac@gmail.com' })).toHaveAttribute('href', 'mailto:anthonyugwujac@gmail.com')
     expect(screen.getByRole('link', { name: /Back to your tasks/ })).toHaveAttribute('href', '/')
     expect(await violations()).toEqual([])
@@ -67,6 +68,7 @@ describe('privacy and terms', () => {
       currentUser: async () => ({ user: { id: 'u1', email: 'a@example.com', firstName: 'Ada', fullName: 'Ada L' }, error: null }),
       onChange: () => () => {},
       signInWithGoogle: async () => null,
+      signInWithIdToken: async () => ({ user: null, error: null }),
       signOut: async () => null,
       deleteAccount: async () => null,
       setDisplayName: async () => ({ user: null, error: null }),

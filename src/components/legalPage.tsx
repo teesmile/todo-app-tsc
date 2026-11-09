@@ -1,12 +1,14 @@
 import Link from 'next/link'
 import { SiteFooter } from './siteFooter'
+import { Wordmark } from './wordmark'
 
-/** The shared frame for /privacy and /terms: a way back, the text, the footer. */
+/** The shared frame for /privacy and /terms: the Todo App wordmark and a way back, the text, the footer. */
 export function LegalPage({ title, updated, children }: { title: string, updated: string, children: React.ReactNode }) {
   return (
     <div className="min-h-dvh bg-gray-50">
       <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto max-w-3xl px-4 py-3">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-4 px-4 py-3">
+          <Wordmark />
           <Link href="/" className="inline-flex min-h-11 items-center font-medium text-orange-800 underline underline-offset-2">
             ← Back to your tasks
           </Link>

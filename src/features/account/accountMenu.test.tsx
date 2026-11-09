@@ -21,6 +21,7 @@ function fakeClient(overrides: Partial<AccountClient> = {}, user: AccountUser | 
       return () => {}
     }),
     signInWithGoogle: vi.fn(async () => null),
+    signInWithIdToken: async () => ({ user: null, error: null }),
     signOut: vi.fn(async () => {
       listener(null)
       return null

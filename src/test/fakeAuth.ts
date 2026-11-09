@@ -39,6 +39,7 @@ export class FakeAuth {
       currentUser: async () => ({ user: current(), error: null }),
       onChange: () => () => {},
       signInWithGoogle: async () => null,
+      signInWithIdToken: async () => ({ user: current(), error: null }),
       signOut: async () => null,
       deleteAccount: async () => null,
       setDisplayName: async (name, expectedUserId) => {

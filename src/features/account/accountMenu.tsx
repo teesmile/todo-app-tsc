@@ -9,7 +9,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { MAX_NAME_LENGTH } from '@/features/tasks/store/profile'
 import { useAccount } from './accountContext'
 import { SIGN_IN_METHODS } from './config'
-import { GoogleSignInButton } from './googleButton'
+import { GoogleIdentityButton, GoogleSignInButton } from './googleButton'
 
 const SYNC_LABELS: Record<SyncStatus, string> = {
   'syncing': 'Syncing…',
@@ -194,10 +194,21 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
           : 'Sign in'
 
   const signInWith = (method: SignInMethod) => run(() => account.signIn(method), { closeOnSuccess: false })
+  // Google's own button signs in without leaving the page. If its script
+  // can't load, the redirect button takes over, so sign-in still works.
+  const [googleFallback, setGoogleFallback] = useState(false)
   const signInButtons = (
     <div className="flex flex-col gap-2">
       {SIGN_IN_METHODS.map(method => (method === 'google'
-        ? <GoogleSignInButton key={method} onClick={() => signInWith(method)} disabled={busy} busy={busy} />
+        ? googleFallback
+          ? <GoogleSignInButton key={method} onClick={() => signInWith(method)} disabled={busy} busy={busy} />
+          : (
+              <GoogleIdentityButton
+                key={method}
+                onCredential={(token, rawNonce) => void run(() => account.signInWithIdToken(token, rawNonce))}
+                onUnavailable={() => setGoogleFallback(true)}
+              />
+            )
         : null))}
     </div>
   )

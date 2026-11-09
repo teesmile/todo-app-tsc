@@ -23,6 +23,7 @@ function setup(client: Partial<AccountClient>, user: AccountUser | null) {
       return () => {}
     },
     signInWithGoogle: async () => null,
+    signInWithIdToken: async () => ({ user: null, error: null }),
     signOut: async () => null,
     deleteAccount: vi.fn(async () => null),
     setDisplayName: async () => ({ user: null, error: null }),
