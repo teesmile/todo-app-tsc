@@ -50,6 +50,9 @@ interface AccountProviderProps {
  */
 export function AccountProvider({ children, configured = CONFIGURED, load = loadAccountClient }: AccountProviderProps) {
   const [state, setState] = useState<AccountState>(configured ? { status: 'checking' } : { status: 'off' })
+  // The state as of right now, for async callbacks that must check which
+  // account is signed in before they write anything.
+  const current = useRef<AccountState>(state)
   const [notice, setNotice] = useState<string | null>(null)
   const client = useRef<AccountClient | null>(null)
   const [remote, setRemote] = useState<Remote | null>(null)
@@ -59,12 +62,51 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
   // numbered: a read's answer only applies if nothing newer started since,
   // so a slow, older read can't put back a name the user just changed.
   const userOps = useRef(0)
+  /** Every state change goes through here; a change of account invalidates reads in flight (review 13). */
+  const setAccount = useCallback((next: AccountState) => {
+    const before = current.current.status === 'signed-in' ? current.current.user.id : null
+    const after = next.status === 'signed-in' ? next.user.id : null
+    if (before !== after)
+      userOps.current++
+    current.current = next
+    setState(next)
+  }, [])
+  /**
+   * Applies a fresher copy of the signed-in user: only if it's still the
+   * account signed in now and, for a read, nothing newer has started since.
+   * Only then is it remembered for offline starts, so a late answer for
+   * another account can't become the account this device restores.
+   */
   const applyUser = useCallback((user: AccountUser, op?: number) => {
     if (op !== undefined && op !== userOps.current)
       return
+    const now = current.current
+    if (now.status !== 'signed-in' || now.user.id !== user.id)
+      return
     rememberAccount(user)
-    setState(s => (s.status === 'signed-in' && s.user.id === user.id ? { ...s, user } : s))
-  }, [])
+    setAccount({ ...now, user })
+  }, [setAccount])
+
+  /**
+   * Before names lived on the account, they were saved on the device
+   * (accountNameKey). Called with a fresh read from Supabase, never the saved
+   * session: the device name goes up only if the account has none, so it
+   * can't overwrite a name chosen on another device (review 13). The
+   * device copy is dropped either way.
+   */
+  const migrateDeviceName = useCallback(async (loaded: AccountClient, fresh: AccountUser) => {
+    const local = (await getDb().meta.get(accountNameKey(fresh.id)))?.value
+    if (typeof local !== 'string')
+      return
+    if (!fresh.chosenName) {
+      const { user, error } = await loaded.setDisplayName(local)
+      if (error)
+        return
+      if (user)
+        applyUser(user)
+    }
+    await getDb().meta.delete(accountNameKey(fresh.id))
+  }, [applyUser])
 
   const userId = state.status === 'signed-in' ? state.user.id : null
   const sync = useSync(userId, remote, { startOffline: state.status === 'signed-in' && Boolean(state.offline) })
@@ -77,20 +119,20 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
 
     const signedIn = (user: AccountUser, offline = false) => {
       rememberAccount(user)
-      setState({ status: 'signed-in', user, ...(offline ? { offline } : {}) })
+      setAccount({ status: 'signed-in', user, ...(offline ? { offline } : {}) })
     }
     /** Offline with a saved session: carry on as the remembered user. */
     const restoreOffline = () => {
       const remembered = mayHaveSession(storageKeys()) ? rememberedAccount() : null
       if (remembered)
-        setState({ status: 'signed-in', user: remembered, offline: true })
+        setAccount({ status: 'signed-in', user: remembered, offline: true })
       return remembered !== null
     }
 
     async function connect() {
       const search = window.location.search
       if (attempt === 0 && !isAuthCallback(search) && !mayHaveSession(storageKeys())) {
-        setState({ status: 'guest' })
+        setAccount({ status: 'guest' })
         return
       }
       try {
@@ -99,7 +141,7 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
           return
         client.current = loaded
         setRemote(loaded.remote)
-        unsubscribe = loaded.onChange(user => (user ? signedIn(user) : setState({ status: 'guest' })))
+        unsubscribe = loaded.onChange(user => (user ? signedIn(user) : setAccount({ status: 'guest' })))
         const failed = callbackError(search)
         const { user, error } = await loaded.currentUser()
         const clean = withoutAuthParams(window.location.href)
@@ -115,25 +157,30 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
           // The session holds the user as of sign-in; re-read it so a name
           // chosen on another device shows here too.
           const op = ++userOps.current
-          void loaded.refreshUser().then(fresh => !cancelled && fresh?.id === user.id && applyUser(fresh, op))
+          void loaded.refreshUser().then(async (fresh) => {
+            if (cancelled || !fresh || fresh.id !== user.id)
+              return
+            applyUser(fresh, op)
+            await migrateDeviceName(loaded, fresh)
+          })
         }
         else if (callback) {
           // Back from Google without a session: an error in the URL, or a
           // code that couldn't be exchanged (expired, reused, or from another
           // browser). Say so, rather than quietly showing a guest.
-          setState({ status: 'guest' })
+          setAccount({ status: 'guest' })
           setNotice(`Sign-in didn't finish: ${failed ?? error ?? 'Google didn\'t confirm it'}. Try signing in again.`)
         }
         else if (!error) {
-          setState({ status: 'guest' })
+          setAccount({ status: 'guest' })
         }
         else if (!restoreOffline()) {
-          setState({ status: 'unavailable', message: UNREACHABLE })
+          setAccount({ status: 'unavailable', message: UNREACHABLE })
         }
       }
       catch {
         if (!cancelled && !restoreOffline())
-          setState({ status: 'unavailable', message: UNREACHABLE })
+          setAccount({ status: 'unavailable', message: UNREACHABLE })
       }
     }
 
@@ -142,7 +189,7 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
       cancelled = true
       unsubscribe()
     }
-  }, [configured, load, attempt, applyUser])
+  }, [configured, load, attempt, applyUser, setAccount, migrateDeviceName])
 
   // Signed in offline: once the network is back, confirm the session for real.
   const offline = state.status === 'signed-in' && state.offline === true
@@ -170,33 +217,6 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [userId, applyUser])
-
-  // Before names lived on the account, they were saved on the device
-  // (accountNameKey). Move such a name to the account once, unless the
-  // account already has one, then drop the device copy.
-  const chosenName = state.status === 'signed-in' ? state.user.chosenName ?? null : null
-  useEffect(() => {
-    if (!userId || state.status !== 'signed-in' || state.offline)
-      return
-    let cancelled = false
-    void (async () => {
-      const local = (await getDb().meta.get(accountNameKey(userId)))?.value
-      if (cancelled || typeof local !== 'string')
-        return
-      if (!chosenName && client.current) {
-        ++userOps.current
-        const { user, error } = await client.current.setDisplayName(local)
-        if (error || cancelled)
-          return
-        if (user)
-          applyUser(user)
-      }
-      await getDb().meta.delete(accountNameKey(userId))
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [userId, chosenName, state])
 
   // The first-sign-in offer: once per account per device, when this device
   // has guest tasks of its own (samples alone don't prompt).
@@ -257,7 +277,7 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     }
     const kept = await evictSignedOutUser(userId)
     forgetRememberedAccount()
-    setState({ status: 'guest' })
+    setAccount({ status: 'guest' })
     setImportOffer(null)
     setNotice(kept > 0
       ? `Signed out. ${kept} unsynced change${kept === 1 ? ' stays' : 's stay'} on this device and will sync next time you sign in.`
@@ -277,14 +297,14 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     await loaded.signOut()
     await forgetUser(expectedUserId)
     forgetRememberedAccount()
-    setState({ status: 'guest' })
+    setAccount({ status: 'guest' })
     setImportOffer(null)
     setNotice('Your account and everything stored with it were deleted. Guest tasks on this device are still here.')
     return null
   }, [])
 
   const retry = useCallback(() => {
-    setState({ status: 'checking' })
+    setAccount({ status: 'checking' })
     setAttempt(n => n + 1)
   }, [])
 

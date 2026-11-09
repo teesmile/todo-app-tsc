@@ -9,6 +9,7 @@ import { add } from '@/features/tasks/store/repository'
 import { FakeAuth } from '@/test/fakeAuth'
 import { AccountProvider } from './accountProvider'
 import { GoogleSignInButton } from './googleButton'
+import { rememberedAccount } from './session'
 
 // The sign-in polish: the account control, Google's own button, a greeting
 // name stored on the account, and telling accounts apart.
@@ -268,5 +269,59 @@ describe('a slow, older read of the account never undoes a newer name', () => {
       await new Promise(r => setTimeout(r, 50))
     })
     expect(heading()).toHaveTextContent(/, Tony$/)
+  })
+})
+
+describe('review 13: late answers never cross accounts or overwrite newer names', () => {
+  it('a slow read for account A, finishing after a switch to B, is neither applied nor remembered', async () => {
+    const auth = new FakeAuth()
+    const a = auth.addUser(MAIN, 'anthony@example.com', 'Anthony')
+    const b = auth.addUser(OTHER, 'ada@example.com', 'Ada')
+    let releaseA!: () => void
+    const aReadDone = new Promise<void>(r => (releaseA = r))
+    let switchUser: (u: typeof b | null) => void = () => {}
+    const base = auth.client(MAIN)
+    const client = auth.client(MAIN, {
+      onChange: (cb) => {
+        switchUser = cb
+        return () => {}
+      },
+      refreshUser: async () => {
+        const answer = await base.refreshUser()
+        await aReadDone
+        return answer
+      },
+    })
+    const first = renderDevice(client)
+    await screen.findByRole('button', { name: /^Account: Anthony/ })
+
+    act(() => switchUser(b))
+    await screen.findByRole('button', { name: /^Account: Ada/ })
+    await act(async () => {
+      releaseA()
+      await new Promise(r => setTimeout(r, 50))
+    })
+    expect(screen.getByRole('button', { name: /^Account: Ada/ })).toBeInTheDocument()
+    expect(rememberedAccount()?.id).toBe(OTHER)
+
+    // Reopened offline on this device: it must restore B, never A.
+    first.unmount()
+    renderDevice(auth.client(MAIN, { currentUser: async () => ({ user: null, error: 'Failed to fetch' }) }))
+    expect(await screen.findByRole('button', { name: /^Account: Ada/ })).toBeInTheDocument()
+    expect(a.id).not.toBe(OTHER)
+  })
+
+  it('never uploads the old device name over a name the account already has on the server', async () => {
+    const auth = new FakeAuth()
+    auth.addUser(MAIN, 'anthony@example.com', 'Anthony', { display_name: 'New cloud name' })
+    await getDb().meta.put({ key: accountNameKey(MAIN), value: 'Old device name' })
+    // The saved session predates the cloud name.
+    const stale = { id: MAIN, email: 'anthony@example.com', firstName: 'Anthony', fullName: 'Anthony Ugwuja', googleName: 'Anthony', chosenName: null }
+    renderDevice(auth.client(MAIN, { currentUser: async () => ({ user: stale, error: null }) }))
+
+    await waitFor(() => expect(heading()).toHaveTextContent(/, New cloud name$/))
+    await waitFor(async () => expect(await getDb().meta.get(accountNameKey(MAIN))).toBeUndefined())
+    expect(auth.users.get(MAIN)!.user_metadata.display_name).toBe('New cloud name')
+    expect(auth.updates).toBe(0)
   })
 })
