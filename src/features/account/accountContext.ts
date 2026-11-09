@@ -50,6 +50,8 @@ export interface Account {
   openImport: () => void
   /** Answers the offer. Resolves with an error message, or null. */
   answerImport: (accept: boolean, includeSamples: boolean) => Promise<string | null>
+  /** Saves the greeting name on the account (null: back to the Google name). Resolves with an error message, or null. */
+  setGreetingName: (name: string | null) => Promise<string | null>
 }
 
 const noop = async () => null
@@ -66,6 +68,7 @@ export const AccountContext = createContext<Account>({
   canImport: false,
   openImport: () => {},
   answerImport: noop,
+  setGreetingName: noop,
 })
 
 export function useAccount(): Account {

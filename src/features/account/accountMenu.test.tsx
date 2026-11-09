@@ -26,6 +26,8 @@ function fakeClient(overrides: Partial<AccountClient> = {}, user: AccountUser | 
       return null
     }),
     deleteAccount: vi.fn(async () => null),
+    setDisplayName: async () => ({ user: null, error: null }),
+    refreshUser: async () => null,
     remote: new FakeRemote(),
     ...overrides,
   } satisfies AccountClient
@@ -118,7 +120,7 @@ describe('account menu', () => {
     const dialog = screen.getByRole('dialog', { name: 'Your account' })
     expect(dialog).toHaveTextContent('toni@example.com')
     // The first sync starts on sign-in; wait for it to settle.
-    await waitFor(() => expect(dialog).toHaveTextContent('Your tasks are synced with your account'))
+    await waitFor(() => expect(dialog).toHaveTextContent('Your tasks are synced with this account'))
     await user.click(within(dialog).getByRole('button', { name: 'Sign out' }))
 
     const signIn = await screen.findByRole('button', { name: 'Sign in' })

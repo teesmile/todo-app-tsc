@@ -44,6 +44,7 @@ describe('privacy and terms', () => {
     // Phase 10: says what sync stores, and what sign-out leaves behind.
     expect(text()).toMatch(/your tasks and labels .* are synced with your account and stored with it in London/)
     expect(text()).toMatch(/changes that haven't synced yet stay on it, hidden, until you sign in again/)
+    expect(text()).toMatch(/the name you choose for the greeting if you set one/)
     expect(screen.getByRole('link', { name: 'anthonyugwujac@gmail.com' })).toHaveAttribute('href', 'mailto:anthonyugwujac@gmail.com')
     expect(screen.getByRole('link', { name: /Back to your tasks/ })).toHaveAttribute('href', '/')
     expect(await violations()).toEqual([])
@@ -68,6 +69,8 @@ describe('privacy and terms', () => {
       signInWithGoogle: async () => null,
       signOut: async () => null,
       deleteAccount: async () => null,
+      setDisplayName: async () => ({ user: null, error: null }),
+      refreshUser: async () => null,
       remote: new FakeRemote(),
     }
     render(<AccountProvider configured load={async () => client}><AppHeader /></AccountProvider>)

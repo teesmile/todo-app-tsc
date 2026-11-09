@@ -9,6 +9,7 @@ import type { Remote } from '@/features/tasks/sync/types'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getDb } from '@/features/tasks/store/db'
+import { accountNameKey } from '@/features/tasks/store/profile'
 import { declineImport, evictSignedOutUser, forgetUser, importCandidates, importGuestTasks, importOfferedKey, unsyncedCount } from '@/features/tasks/sync/account'
 import { pushAll } from '@/features/tasks/sync/engine'
 import { useSync } from '@/features/tasks/sync/useSync'
@@ -54,6 +55,16 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
   const [remote, setRemote] = useState<Remote | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [importOffer, setImportOffer] = useState<ImportCandidates | null>(null)
+  // Reads of the user (start-up, tab shown again) and name saves are
+  // numbered: a read's answer only applies if nothing newer started since,
+  // so a slow, older read can't put back a name the user just changed.
+  const userOps = useRef(0)
+  const applyUser = useCallback((user: AccountUser, op?: number) => {
+    if (op !== undefined && op !== userOps.current)
+      return
+    rememberAccount(user)
+    setState(s => (s.status === 'signed-in' && s.user.id === user.id ? { ...s, user } : s))
+  }, [])
 
   const userId = state.status === 'signed-in' ? state.user.id : null
   const sync = useSync(userId, remote, { startOffline: state.status === 'signed-in' && Boolean(state.offline) })
@@ -100,7 +111,11 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
         if (user) {
           signedIn(user)
           if (callback)
-            setNotice(`Signed in as ${user.fullName ?? user.email ?? 'you'}`)
+            setNotice(`Signed in as ${[user.fullName, user.email && `(${user.email})`].filter(Boolean).join(' ') || 'you'}`)
+          // The session holds the user as of sign-in; re-read it so a name
+          // chosen on another device shows here too.
+          const op = ++userOps.current
+          void loaded.refreshUser().then(fresh => !cancelled && fresh?.id === user.id && applyUser(fresh, op))
         }
         else if (callback) {
           // Back from Google without a session: an error in the URL, or a
@@ -127,7 +142,7 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
       cancelled = true
       unsubscribe()
     }
-  }, [configured, load, attempt])
+  }, [configured, load, attempt, applyUser])
 
   // Signed in offline: once the network is back, confirm the session for real.
   const offline = state.status === 'signed-in' && state.offline === true
@@ -138,6 +153,50 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     window.addEventListener('online', onOnline)
     return () => window.removeEventListener('online', onOnline)
   }, [offline])
+
+  // A greeting name chosen on another device arrives when this tab is looked at again.
+  useEffect(() => {
+    if (!userId)
+      return
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || !client.current)
+        return
+      const op = ++userOps.current
+      void client.current.refreshUser().then((fresh) => {
+        if (fresh?.id === userId)
+          applyUser(fresh, op)
+      })
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [userId, applyUser])
+
+  // Before names lived on the account, they were saved on the device
+  // (accountNameKey). Move such a name to the account once, unless the
+  // account already has one, then drop the device copy.
+  const chosenName = state.status === 'signed-in' ? state.user.chosenName ?? null : null
+  useEffect(() => {
+    if (!userId || state.status !== 'signed-in' || state.offline)
+      return
+    let cancelled = false
+    void (async () => {
+      const local = (await getDb().meta.get(accountNameKey(userId)))?.value
+      if (cancelled || typeof local !== 'string')
+        return
+      if (!chosenName && client.current) {
+        ++userOps.current
+        const { user, error } = await client.current.setDisplayName(local)
+        if (error || cancelled)
+          return
+        if (user)
+          applyUser(user)
+      }
+      await getDb().meta.delete(accountNameKey(userId))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [userId, chosenName, state])
 
   // The first-sign-in offer: once per account per device, when this device
   // has guest tasks of its own (samples alone don't prompt).
@@ -254,10 +313,24 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     }
   }, [userId, syncNow])
 
+  const setGreetingName = useCallback(async (name: string | null) => {
+    const loaded = client.current
+    if (!loaded || !userId)
+      return UNREACHABLE
+    // A save supersedes any read already in flight.
+    ++userOps.current
+    const { user, error } = await loaded.setDisplayName(name && name.trim() ? name.trim().slice(0, 40) : null)
+    if (error)
+      return `The name wasn't saved: ${error}`
+    if (user)
+      applyUser(user)
+    return null
+  }, [userId, applyUser])
+
   const canImport = Boolean(candidates && candidates.own + candidates.samples > 0)
   const value = useMemo<Account>(
-    () => ({ state, notice, sync: userId ? sync.status : null, signIn, signOut, deleteAccount, retry, importOffer, canImport, openImport, answerImport }),
-    [state, notice, userId, sync.status, signIn, signOut, deleteAccount, retry, importOffer, canImport, openImport, answerImport],
+    () => ({ state, notice, sync: userId ? sync.status : null, signIn, signOut, deleteAccount, retry, importOffer, canImport, openImport, answerImport, setGreetingName }),
+    [state, notice, userId, sync.status, signIn, signOut, deleteAccount, retry, importOffer, canImport, openImport, answerImport, setGreetingName],
   )
   return <AccountContext value={value}>{children}</AccountContext>
 }

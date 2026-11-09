@@ -1,11 +1,12 @@
 'use client'
 
 import type { SignInMethod } from './config'
+import type { AccountUser } from './session'
 import type { SyncStatus } from '@/features/tasks/sync/useSync'
-import { CircleUserRound, X } from 'lucide-react'
+import { LogIn, X } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useId, useRef, useState } from 'react'
-import { MAX_NAME_LENGTH, setAccountDisplayName, useAccountDisplayName } from '@/features/tasks/store/profile'
+import { MAX_NAME_LENGTH } from '@/features/tasks/store/profile'
 import { useAccount } from './accountContext'
 import { SIGN_IN_METHODS } from './config'
 import { GoogleSignInButton } from './googleButton'
@@ -20,7 +21,7 @@ const SYNC_LABELS: Record<SyncStatus, string> = {
 
 const SYNC_EXPLAINED: Record<SyncStatus, string> = {
   'syncing': 'Syncing your tasks with your account.',
-  'synced': 'Your tasks are synced with your account.',
+  'synced': 'Your tasks are synced with this account.',
   'offline': 'You\'re offline. Changes are saved on this device and sync when you\'re back online.',
   'unavailable': 'Your account can\'t be reached right now. Changes are saved on this device and sync when it\'s back.',
   'signin-needed': 'Your session has ended. Sign in again to sync; your changes are kept on this device until then.',
@@ -63,33 +64,50 @@ export function AccountMenu() {
   if (state.status === 'off')
     return null
 
-  const label = state.status === 'signed-in'
-    ? (state.user.firstName ?? 'Account')
-    : state.status === 'unavailable'
-      ? 'Accounts unavailable'
-      : 'Sign in'
-  const syncLabel = state.status === 'signed-in' && sync ? SYNC_LABELS[sync] : null
+  const user = state.status === 'signed-in' ? state.user : null
+  const syncLabel = user && sync ? SYNC_LABELS[sync] : null
+  const name = user ? (user.firstName ?? user.email ?? 'Account') : null
 
   return (
     <div className="flex shrink-0 flex-col items-end">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen(true)}
-        disabled={state.status === 'checking'}
-        aria-haspopup="dialog"
-        aria-label={state.status === 'signed-in' ? `Account: ${label}${syncLabel ? `, ${syncLabel.replace('…', '')}` : ''}` : undefined}
-        className="flex min-h-11 max-w-[min(15rem,55vw)] items-center gap-2 rounded-full border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 disabled:opacity-60"
-      >
-        {/* Fixed size and never shrinks: Safari lets an SVG in a tight flex row shrink to nothing. */}
-        <CircleUserRound size={20} strokeWidth={2} className="shrink-0 text-gray-700" aria-hidden="true" />
-        <span className="min-w-0 truncate">{state.status === 'checking' ? 'Checking…' : label}</span>
-        {syncLabel && (
-          <span className={`shrink-0 text-xs font-normal ${sync === 'synced' || sync === 'syncing' ? 'text-gray-600' : 'text-orange-800'}`}>
-            {`· ${syncLabel}`}
-          </span>
-        )}
-      </button>
+      {user
+        ? (
+            <button
+              ref={triggerRef}
+              type="button"
+              onClick={() => setOpen(true)}
+              aria-haspopup="dialog"
+              // The email is part of the name: two accounts can share a first
+              // name, and the header alone couldn't tell them apart.
+              aria-label={`Account: ${name}${user.email ? ` (${user.email})` : ''}${syncLabel ? `, ${syncLabel.replace('…', '')}` : ''}`}
+              title={user.email ?? undefined}
+              className="flex min-h-11 max-w-[min(16rem,60vw)] items-center gap-2 rounded-full border border-gray-300 bg-white py-1 pl-1 pr-3 text-sm font-medium text-gray-800 hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+            >
+              {/* Fixed size, never shrinks: Safari lets a flex item in a tight row shrink to nothing. */}
+              <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-semibold text-orange-900">
+                {(name ?? '?').slice(0, 1).toUpperCase()}
+              </span>
+              <span className="min-w-0 truncate">{name}</span>
+              {syncLabel && (
+                <span className={`shrink-0 text-xs font-normal ${sync === 'synced' || sync === 'syncing' ? 'text-gray-600' : 'text-orange-800'}`}>
+                  {`· ${syncLabel}`}
+                </span>
+              )}
+            </button>
+          )
+        : (
+            <button
+              ref={triggerRef}
+              type="button"
+              onClick={() => setOpen(true)}
+              disabled={state.status === 'checking'}
+              aria-haspopup="dialog"
+              className="flex min-h-11 items-center gap-2 rounded-full bg-gray-900 px-4 text-sm font-semibold text-white shadow-sm hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 disabled:bg-gray-400"
+            >
+              <LogIn size={18} strokeWidth={2.25} className="shrink-0" aria-hidden="true" />
+              <span className="whitespace-nowrap">{state.status === 'checking' ? 'Checking…' : state.status === 'unavailable' ? 'Accounts unavailable' : 'Sign in'}</span>
+            </button>
+          )}
       {/* Announces sign-in, sign-out and failures; also visible, in plain text. */}
       <p role="status" className="mt-1 max-w-56 text-right text-xs text-gray-600 empty:hidden">{notice}</p>
       <AccountDialog open={open} onClose={() => setOpen(false)} returnFocus={triggerRef} />
@@ -193,7 +211,7 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
                 {signedInUser.fullName && signedInUser.email && <span className="block text-gray-600">{signedInUser.email}</span>}
               </p>
               {/* Keyed by account: another tab signing in as someone else starts a fresh editor, so a draft can't be saved to them. */}
-              <GreetingName key={signedInUser.id} userId={signedInUser.id} accountName={signedInUser.firstName} />
+              <GreetingName key={signedInUser.id} user={signedInUser} />
               {sync && <p className={`rounded-lg p-3 ${sync === 'synced' || sync === 'syncing' ? 'bg-gray-50 text-gray-800' : 'bg-orange-50 text-orange-900'}`}>{SYNC_EXPLAINED[sync]}</p>}
               {sync === 'signin-needed' && signInButtons}
               <div className="flex flex-wrap gap-2">
@@ -300,7 +318,8 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
  * left out unless ticked; titles too long for the server stay on the device.
  */
 function ImportDialog({ open, returnFocus }: { open: boolean, returnFocus: React.RefObject<HTMLButtonElement | null> }) {
-  const { importOffer, answerImport } = useAccount()
+  const { importOffer, answerImport, state } = useAccount()
+  const signedIn = state.status === 'signed-in' ? state.user : null
   const headingId = useId()
   const dialogRef = useDialog(open, returnFocus)
   const [includeSamples, setIncludeSamples] = useState(false)
@@ -340,7 +359,11 @@ function ImportDialog({ open, returnFocus }: { open: boolean, returnFocus: React
           <h2 id={headingId} className="text-lg font-semibold text-gray-900">
             {`Add ${count} task${count === 1 ? '' : 's'} from this device to your account?`}
           </h2>
-          <p>They&apos;ll sync to your other devices. If you keep them here instead, you&apos;ll see them whenever you&apos;re signed out.</p>
+          <p>
+            {'They\'ll be added to '}
+            <strong className="font-semibold text-gray-900">{signedIn?.email ?? 'your account'}</strong>
+            {' and sync to your other devices signed in to it. If you keep them here instead, you\'ll see them whenever you\'re signed out.'}
+          </p>
           {importOffer.samples > 0 && (
             <div className="flex items-center gap-2">
               <input id={samplesId} type="checkbox" checked={includeSamples} onChange={e => setIncludeSamples(e.target.checked)} className="h-5 w-5 accent-orange-600" />
@@ -367,23 +390,34 @@ function ImportDialog({ open, returnFocus }: { open: boolean, returnFocus: React
 }
 
 /**
- * The name the greeting uses for a signed-in user. Saved on this device for
- * this account and wins over the account's name; empty goes back to it.
+ * The name the greeting uses for a signed-in user. Saved on the account (the
+ * user's Supabase metadata), so every device shows it; empty goes back to the
+ * Google name.
  */
-function GreetingName({ userId, accountName }: { userId: string, accountName: string | null }) {
-  const chosen = useAccountDisplayName(userId)
+function GreetingName({ user }: { user: AccountUser }) {
+  const { setGreetingName } = useAccount()
   const [draft, setDraft] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const id = useId()
-  const value = draft ?? chosen ?? accountName ?? ''
+  const value = draft ?? user.chosenName ?? user.googleName ?? ''
 
-  async function save(name: string) {
+  async function save(name: string | null) {
     const submitted = draft
-    const result = await setAccountDisplayName(userId, name)
+    setBusy(true)
+    setError(null)
+    const failed = await setGreetingName(name)
+    setBusy(false)
+    if (failed) {
+      setError(failed)
+      return
+    }
     // Clear only what was submitted: text typed while the save was in flight
     // is a newer edit, not something to throw away (review 12).
     setDraft(current => (current === submitted ? null : current))
-    setSaved(result ? `The greeting now says "${result}".` : `The greeting uses your Google name${accountName ? `, ${accountName}` : ''}, again.`)
+    const trimmed = name?.trim()
+    setSaved(trimmed ? `The greeting now says "${trimmed.slice(0, MAX_NAME_LENGTH)}" on all your devices.` : `The greeting uses your Google name${user.googleName ? `, ${user.googleName}` : ''}, again.`)
   }
 
   return (
@@ -409,18 +443,19 @@ function GreetingName({ userId, accountName }: { userId: string, accountName: st
           aria-describedby={`${id}-hint`}
           className="min-h-11 min-w-0 flex-1 rounded-lg border border-gray-300 px-3 focus:outline-none focus:ring-2 focus:ring-orange-500"
         />
-        <button type="submit" disabled={draft === null} className={SECONDARY}>Save</button>
+        <button type="submit" disabled={draft === null || busy} className={SECONDARY}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
       <p id={`${id}-hint`} className="text-xs text-gray-600">
-        Kept on this device. Leave it empty to use your Google name.
-        {chosen && (
+        Saved to your account, so all your devices use it. Leave it empty to use your Google name.
+        {user.chosenName && (
           <>
             {' '}
-            <button type="button" onClick={() => void save('')} className="font-medium text-orange-800 underline">Use my Google name</button>
+            <button type="button" disabled={busy} onClick={() => void save(null)} className="font-medium text-orange-800 underline">Use my Google name</button>
           </>
         )}
       </p>
       <p role="status" className="text-xs text-gray-700 empty:hidden">{saved}</p>
+      {error && <p role="alert" className="rounded-lg bg-red-50 p-2 text-xs text-red-800">{error}</p>}
     </form>
   )
 }

@@ -26,6 +26,8 @@ function client(remote: FakeRemote, overrides: Partial<AccountClient> = {}): Acc
     signInWithGoogle: async () => null,
     signOut: async () => null,
     deleteAccount: async () => null,
+    setDisplayName: async () => ({ user: null, error: null }),
+    refreshUser: async () => null,
     remote,
     ...overrides,
   }
@@ -59,7 +61,7 @@ describe('signed in, with sync running', { timeout: 15_000 }, () => {
 
     await user.type(screen.getByRole('textbox', { name: 'New task' }), 'Written on my phone{Enter}')
     await waitFor(() => expect([...remote.rows.tasks.values()].map(t => t.title)).toContain('Written on my phone'), SLOW)
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Account: Toni, Synced$/ })).toBeInTheDocument(), SLOW)
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Account: Toni \(toni@example.com\), Synced$/ })).toBeInTheDocument(), SLOW)
   })
 
   it('offers this device\'s guest tasks once, and adds them to the account', async () => {
@@ -102,7 +104,7 @@ describe('signed in, with sync running', { timeout: 15_000 }, () => {
     remote.failing = 'offline'
     renderApp(client(remote, { currentUser: async () => ({ user: null, error: 'Failed to fetch' }) }))
 
-    expect(await screen.findByRole('button', { name: /^Account: Toni, Offline$/ }, SLOW)).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /^Account: Toni \(toni@example.com\), Offline$/ }, SLOW)).toBeInTheDocument()
     expect(await screen.findByRole('checkbox', { name: 'My own task' })).toBeInTheDocument()
   })
 })

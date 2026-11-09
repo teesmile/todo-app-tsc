@@ -5,7 +5,7 @@ import { useAccount } from '@/features/account/accountContext'
 import { AccountMenu } from '@/features/account/accountMenu'
 import { useNow } from '../hooks/useNow'
 import { formatLongDate, greetingFor } from '../lib/dates'
-import { MAX_NAME_LENGTH, setDisplayName, skipNamePrompt, useAccountDisplayName, useProfile } from '../store/profile'
+import { MAX_NAME_LENGTH, setDisplayName, skipNamePrompt, useProfile } from '../store/profile'
 
 /**
  * "Good morning, Toni · Saturday 7 November". The greeting and date are
@@ -20,9 +20,9 @@ export function AppHeader() {
   const profile = useProfile()
   const { state } = useAccount()
   const signedIn = state.status === 'signed-in'
-  // A signed-in user's own choice wins, then the account's name, then the device's guest name.
-  const chosen = useAccountDisplayName(signedIn ? state.user.id : null)
-  const name = (signedIn ? chosen ?? state.user.firstName : null) ?? profile?.name ?? null
+  // Signed in: the name chosen on the account, else the Google first name
+  // (both in state.user.firstName). A guest: the name kept on this device.
+  const name = (signedIn ? state.user.firstName : null) ?? profile?.name ?? null
   const askName = profile !== undefined && !signedIn && !profile.promptDone && !name
 
   return (

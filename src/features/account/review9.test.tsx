@@ -25,6 +25,8 @@ function setup(client: Partial<AccountClient>, user: AccountUser | null) {
     signInWithGoogle: async () => null,
     signOut: async () => null,
     deleteAccount: vi.fn(async () => null),
+    setDisplayName: async () => ({ user: null, error: null }),
+    refreshUser: async () => null,
     remote: new FakeRemote(),
     ...client,
   }

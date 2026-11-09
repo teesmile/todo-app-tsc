@@ -48,15 +48,25 @@ export function withoutAuthParams(href: string): string | null {
 export interface AccountUser {
   id: string
   email: string | null
+  /** The name to greet: the one the user chose, else the Google first name. */
   firstName: string | null
   fullName: string | null
+  /** The first name from Google, the fallback when no name has been chosen. */
+  googleName?: string | null
+  /** The greeting name the user chose, stored on the account so every device uses it. */
+  chosenName?: string | null
 }
+
+/** Where the chosen greeting name lives on the Supabase user. */
+export const DISPLAY_NAME_KEY = 'display_name'
 
 /** Maps a Supabase user (as stored in the session) to an AccountUser. */
 export function accountUserFrom(user: { id: string, email?: string | null, user_metadata?: Record<string, unknown> }): AccountUser {
   const meta = user.user_metadata
   const full = typeof meta?.full_name === 'string' ? meta.full_name.trim() : typeof meta?.name === 'string' ? meta.name.trim() : ''
-  return { id: user.id, email: user.email ?? null, firstName: firstNameFrom(meta), fullName: full || null }
+  const chosen = typeof meta?.[DISPLAY_NAME_KEY] === 'string' ? meta[DISPLAY_NAME_KEY].trim().slice(0, 40) : ''
+  const googleName = firstNameFrom(meta)
+  return { id: user.id, email: user.email ?? null, firstName: chosen || googleName, fullName: full || null, googleName, chosenName: chosen || null }
 }
 
 const MAX_NAME_LENGTH = 40

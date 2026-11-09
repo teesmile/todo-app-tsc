@@ -10,7 +10,7 @@ const CONTACT_EMAIL = 'anthonyugwujac@gmail.com'
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy" updated="8 November 2026">
+    <LegalPage title="Privacy" updated="9 November 2026">
       <p>
         Todo App is a task list made and run by Anthony Ugwuja. This page says, in plain words, what it keeps,
         where, and how to get rid of it. The short version: your tasks live on your device, an account is
@@ -33,8 +33,8 @@ export default function PrivacyPage() {
       <h2>When you sign in</h2>
       <p>
         Accounts are run on Supabase, in its London (UK) data centre. Signing in stores your account there:
-        your email address, your name and profile picture link from Google, your Google account ID, and when you
-        signed in. Supabase also keeps standard security logs of sign-ins, such as the time, IP address and
+        your email address, your name and profile picture link from Google, your Google account ID, when you
+        signed in, and the name you choose for the greeting if you set one (so all your devices use it). Supabase also keeps standard security logs of sign-ins, such as the time, IP address and
         browser.
       </p>
       <p>

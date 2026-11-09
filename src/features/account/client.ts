@@ -3,7 +3,7 @@ import type { AccountUser } from './session'
 import type { Remote } from '@/features/tasks/sync/types'
 import { supabaseRemote } from '@/features/tasks/sync/supabaseRemote'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './config'
-import { accountUserFrom } from './session'
+import { accountUserFrom, DISPLAY_NAME_KEY } from './session'
 
 /**
  * Everything the app does with Supabase Auth, as five methods. Components and
@@ -25,6 +25,14 @@ export interface AccountClient {
    * server refuses unless `expectedUserId` is still the signed-in user.
    */
   deleteAccount: (expectedUserId: string) => Promise<string | null>
+  /**
+   * Sets (or, with null, clears) the greeting name on the account, in the
+   * user's Supabase metadata, so every device gets it. Returns the updated
+   * user or an error message.
+   */
+  setDisplayName: (name: string | null) => Promise<{ user: AccountUser | null, error: string | null }>
+  /** Re-reads the user from Supabase Auth, to pick up a name changed on another device. */
+  refreshUser: () => Promise<AccountUser | null>
   /** The server as the sync engine sees it, signed in as this session's user. */
   remote: Remote
 }
@@ -69,6 +77,14 @@ export function accountClientFrom(supabase: SupabaseClient): AccountClient {
     async deleteAccount(expectedUserId) {
       const { error } = await supabase.rpc('delete_my_account', { expected_user_id: expectedUserId })
       return error?.message ?? null
+    },
+    async setDisplayName(name) {
+      const { data, error } = await supabase.auth.updateUser({ data: { [DISPLAY_NAME_KEY]: name } })
+      return { user: data.user ? accountUserFrom(data.user) : null, error: error?.message ?? null }
+    },
+    async refreshUser() {
+      const { data, error } = await supabase.auth.getUser()
+      return error || !data.user ? null : accountUserFrom(data.user)
     },
     remote: supabaseRemote(supabase),
   }
