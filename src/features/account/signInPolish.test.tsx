@@ -2,7 +2,8 @@ import type { AccountClient } from './client'
 import type { AccountUser } from './session'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import Dexie from 'dexie'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppHeader } from '@/features/tasks/components/appHeader'
 import { getDb } from '@/features/tasks/store/db'
 import { accountNameKey, setAccountDisplayName, setDisplayName } from '@/features/tasks/store/profile'
@@ -35,7 +36,10 @@ function renderHeader(user: AccountUser | null) {
   return { events, ...view }
 }
 
-afterEach(() => window.localStorage.clear())
+afterEach(() => {
+  vi.restoreAllMocks()
+  window.localStorage.clear()
+})
 
 describe('the account icon', () => {
   it.each([['a guest', null, 'Sign in'], ['a signed-in user', toni, /^Account: Toni/]] as const)('is a fixed 20px icon that never shrinks, for %s', async (_who, user, name) => {
@@ -143,5 +147,32 @@ describe('the greeting name stays with its account', () => {
     await waitFor(() => expect(now).toHaveValue('Ada'))
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
     expect(await getDb().meta.get(accountNameKey(ada.id))).toBeUndefined()
+  })
+})
+
+describe('review 12: a name save finishing late keeps newer typing', () => {
+  it('leaves text typed while the save was in flight, still editable and saveable', async () => {
+    let release!: () => void
+    const gate = new Promise<void>(r => (release = r))
+    const meta = getDb().meta
+    const realPut = meta.put.bind(meta) as (...args: unknown[]) => Promise<unknown>
+    vi.spyOn(meta, 'put').mockImplementationOnce(((...args: unknown[]) => Dexie.waitFor(gate).then(() => realPut(...args))) as never)
+
+    const { events } = renderHeader(toni)
+    await events.click(await screen.findByRole('button', { name: /^Account: Toni/ }))
+    const field = screen.getByRole('textbox', { name: 'Name in the greeting' })
+    await events.clear(field)
+    await events.type(field, 'First edit{Enter}')
+    await events.clear(field)
+    await events.type(field, 'Second edit')
+
+    await act(async () => {
+      release()
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    await waitFor(async () => expect((await getDb().meta.get(accountNameKey(toni.id)))?.value).toBe('First edit'))
+    expect(field).toHaveValue('Second edit')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
   })
 })

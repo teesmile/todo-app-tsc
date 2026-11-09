@@ -378,8 +378,11 @@ function GreetingName({ userId, accountName }: { userId: string, accountName: st
   const value = draft ?? chosen ?? accountName ?? ''
 
   async function save(name: string) {
+    const submitted = draft
     const result = await setAccountDisplayName(userId, name)
-    setDraft(null)
+    // Clear only what was submitted: text typed while the save was in flight
+    // is a newer edit, not something to throw away (review 12).
+    setDraft(current => (current === submitted ? null : current))
     setSaved(result ? `The greeting now says "${result}".` : `The greeting uses your Google name${accountName ? `, ${accountName}` : ''}, again.`)
   }
 
