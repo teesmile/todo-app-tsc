@@ -11,6 +11,8 @@ export type FocusTarget
  * Where keyboard focus should go once the task `id` is deleted, so it never
  * falls back to the top of the page:
  * - the next task in the same group;
+ * - in the Newest list, else the previous task: its heading is for screen
+ *   readers only, so focus there would be invisible (review 17);
  * - else that group's heading, if the group still has tasks;
  * - else the next group's heading (or the previous one), so focus stays in
  *   the list, where Ctrl+Z can still undo;
@@ -24,6 +26,9 @@ export function focusAfterRemoving(groups: TaskGroup[], id: string): FocusTarget
     const next = group.tasks[index + 1]
     if (next)
       return { kind: 'row', id: next.id }
+    const previous = group.tasks[index - 1]
+    if (group.key === 'newest' && previous)
+      return { kind: 'row', id: previous.id }
     if (group.tasks.length > 1)
       return { kind: 'heading', group: group.key }
     const neighbour = groups[g + 1] ?? groups[g - 1]

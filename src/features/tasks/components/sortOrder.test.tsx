@@ -80,3 +80,19 @@ describe('the Order switch', () => {
     expect(screen.getByRole('region', { name: /^All tasks, newest first/ })).toBeInTheDocument()
   })
 })
+
+describe('keyboard focus in the Newest list (review 17)', () => {
+  it('deleting the bottom task leaves focus on a visible task, not the hidden heading', async () => {
+    const user = await renderList()
+    const before = titles()
+    const last = before.at(-1)!
+    const deleteLast = screen.getByRole('button', { name: `Delete "${last}"` })
+    deleteLast.focus()
+    await user.keyboard('{Enter}')
+
+    const previous = before.at(-2)!
+    await waitFor(() => expect(document.activeElement?.closest('[data-task-id]')).not.toBeNull())
+    expect(document.activeElement?.closest('li')?.textContent).toContain(previous)
+    expect(document.activeElement?.tagName).not.toBe('H3')
+  })
+})
