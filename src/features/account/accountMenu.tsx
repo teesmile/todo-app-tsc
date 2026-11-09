@@ -3,7 +3,7 @@
 import type { SignInMethod } from './config'
 import type { AccountUser } from './session'
 import type { SyncStatus } from '@/features/tasks/sync/useSync'
-import { LogIn, X } from 'lucide-react'
+import { CloudAlert, CloudCheck, CloudOff, LogIn, RefreshCw, TriangleAlert, X } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useId, useRef, useState } from 'react'
 import { MAX_NAME_LENGTH } from '@/features/tasks/store/profile'
@@ -17,6 +17,19 @@ const SYNC_LABELS: Record<SyncStatus, string> = {
   'offline': 'Offline',
   'unavailable': 'Sync paused',
   'signin-needed': 'Sign in again',
+}
+
+/**
+ * The sync state beside the name: an icon, with words only when something
+ * needs attention. The meaning is always in the tooltip and the button's
+ * accessible name.
+ */
+const SYNC_ICONS: Record<SyncStatus, { Icon: typeof CloudCheck, words: string | null, tone: string }> = {
+  'synced': { Icon: CloudCheck, words: null, tone: 'text-green-700' },
+  'syncing': { Icon: RefreshCw, words: null, tone: 'text-gray-500 animate-spin motion-reduce:animate-none' },
+  'offline': { Icon: CloudOff, words: 'Offline', tone: 'text-orange-800' },
+  'unavailable': { Icon: CloudAlert, words: 'Sync paused', tone: 'text-orange-800' },
+  'signin-needed': { Icon: TriangleAlert, words: 'Sign in again', tone: 'text-orange-800' },
 }
 
 const SYNC_EXPLAINED: Record<SyncStatus, string> = {
@@ -80,7 +93,7 @@ export function AccountMenu() {
               // The email is part of the name: two accounts can share a first
               // name, and the header alone couldn't tell them apart.
               aria-label={`Account: ${name}${user.email ? ` (${user.email})` : ''}${syncLabel ? `, ${syncLabel.replace('…', '')}` : ''}`}
-              title={user.email ?? undefined}
+              title={[user.email, syncLabel?.replace('…', '')].filter(Boolean).join(' · ') || undefined}
               className="flex min-h-11 max-w-[min(16rem,60vw)] items-center gap-2 rounded-full border border-gray-300 bg-white py-1 pl-1 pr-3 text-sm font-medium text-gray-800 hover:border-gray-400 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
             >
               {/* Fixed size, never shrinks: Safari lets a flex item in a tight row shrink to nothing. */}
@@ -88,11 +101,15 @@ export function AccountMenu() {
                 {(name ?? '?').slice(0, 1).toUpperCase()}
               </span>
               <span className="min-w-0 truncate">{name}</span>
-              {syncLabel && (
-                <span className={`shrink-0 text-xs font-normal ${sync === 'synced' || sync === 'syncing' ? 'text-gray-600' : 'text-orange-800'}`}>
-                  {`· ${syncLabel}`}
-                </span>
-              )}
+              {sync && (() => {
+                const { Icon, words, tone } = SYNC_ICONS[sync]
+                return (
+                  <span className="flex shrink-0 items-center gap-1 text-xs font-normal" data-sync={sync}>
+                    <Icon size={16} strokeWidth={2.25} className={`shrink-0 ${tone}`} aria-hidden="true" />
+                    {words && <span className="text-orange-800">{words}</span>}
+                  </span>
+                )
+              })()}
             </button>
           )
         : (
@@ -109,7 +126,10 @@ export function AccountMenu() {
             </button>
           )}
       {/* Announces sign-in, sign-out and failures; also visible, in plain text. */}
-      <p role="status" className="mt-1 max-w-56 text-right text-xs text-gray-600 empty:hidden">{notice}</p>
+      {/* Always mounted, so screen readers announce each notice; the text fades and is then cleared. */}
+      <p role="status" className="mt-1 max-w-56 text-right text-xs text-gray-600">
+        {notice && <span key={notice} className="notice-fade block">{notice}</span>}
+      </p>
       <AccountDialog open={open} onClose={() => setOpen(false)} returnFocus={triggerRef} />
       <ImportDialog open={importOffer !== null} returnFocus={triggerRef} />
     </div>
@@ -211,7 +231,7 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
                 {signedInUser.fullName && signedInUser.email && <span className="block text-gray-600">{signedInUser.email}</span>}
               </p>
               {/* Keyed by account: another tab signing in as someone else starts a fresh editor, so a draft can't be saved to them. */}
-              <GreetingName key={signedInUser.id} user={signedInUser} />
+              <GreetingName key={signedInUser.id} user={signedInUser} onSaved={close} />
               {sync && <p className={`rounded-lg p-3 ${sync === 'synced' || sync === 'syncing' ? 'bg-gray-50 text-gray-800' : 'bg-orange-50 text-orange-900'}`}>{SYNC_EXPLAINED[sync]}</p>}
               {sync === 'signin-needed' && signInButtons}
               <div className="flex flex-wrap gap-2">
@@ -394,11 +414,13 @@ function ImportDialog({ open, returnFocus }: { open: boolean, returnFocus: React
  * user's Supabase metadata), so every device shows it; empty goes back to the
  * Google name.
  */
-function GreetingName({ user }: { user: AccountUser }) {
+function GreetingName({ user, onSaved }: { user: AccountUser, onSaved: () => void }) {
   const { setGreetingName } = useAccount()
   const [draft, setDraft] = useState<string | null>(null)
+  // The latest typed text, readable after the save's await (the state above
+  // is the value from when the save started).
+  const latestDraft = useRef<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [saved, setSaved] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const id = useId()
   const value = draft ?? user.chosenName ?? user.googleName ?? ''
@@ -416,8 +438,13 @@ function GreetingName({ user }: { user: AccountUser }) {
     // Clear only what was submitted: text typed while the save was in flight
     // is a newer edit, not something to throw away (review 12).
     setDraft(current => (current === submitted ? null : current))
-    const trimmed = name?.trim()
-    setSaved(trimmed ? `The greeting now says "${trimmed.slice(0, MAX_NAME_LENGTH)}" on all your devices.` : `The greeting uses your Google name${user.googleName ? `, ${user.googleName}` : ''}, again.`)
+    // Done: close the dialog (focus goes back to the account button); the
+    // header's notice says what the greeting now is. Text typed after
+    // submitting keeps it open, so that newer text isn't lost (review 12).
+    if (latestDraft.current === submitted) {
+      latestDraft.current = null
+      onSaved()
+    }
   }
 
   return (
@@ -437,8 +464,8 @@ function GreetingName({ user }: { user: AccountUser }) {
           value={value}
           maxLength={MAX_NAME_LENGTH}
           onChange={(e) => {
+            latestDraft.current = e.target.value
             setDraft(e.target.value)
-            setSaved(null)
           }}
           aria-describedby={`${id}-hint`}
           className="min-h-11 min-w-0 flex-1 rounded-lg border border-gray-300 px-3 focus:outline-none focus:ring-2 focus:ring-orange-500"
@@ -454,7 +481,6 @@ function GreetingName({ user }: { user: AccountUser }) {
           </>
         )}
       </p>
-      <p role="status" className="text-xs text-gray-700 empty:hidden">{saved}</p>
       {error && <p role="alert" className="rounded-lg bg-red-50 p-2 text-xs text-red-800">{error}</p>}
     </form>
   )

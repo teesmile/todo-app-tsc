@@ -1,4 +1,5 @@
 import type { AccountClient } from './client'
+import type { FakeRemote } from '@/test/fakeRemote'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -17,12 +18,12 @@ import { rememberedAccount } from './session'
 const MAIN = '44444444-4444-4444-8444-444444444444'
 const OTHER = '66666666-6666-4666-8666-666666666666'
 
-function renderDevice(client: AccountClient | null, { signedIn = true } = {}) {
+function renderDevice(client: AccountClient | null, { signedIn = true, noticeMs }: { signedIn?: boolean, noticeMs?: number } = {}) {
   if (signedIn)
     window.localStorage.setItem('sb-test-auth-token', '{}')
   const events = userEvent.setup()
   const view = render(
-    <AccountProvider configured load={async () => client ?? new FakeAuth().client('none')}>
+    <AccountProvider configured load={async () => client ?? new FakeAuth().client('none')} noticeMs={noticeMs}>
       <AppHeader />
     </AccountProvider>,
   )
@@ -126,7 +127,7 @@ describe('the greeting name lives on the account', () => {
     await laptop.events.clear(field)
     await laptop.events.type(field, 'Tony{Enter}')
     await waitFor(() => expect(heading()).toHaveTextContent(/, Tony$/))
-    expect(within(screen.getByRole('dialog')).getAllByRole('status').at(-1)).toHaveTextContent('The greeting now says "Tony" on all your devices.')
+    expect(screen.getAllByRole('status')[0]).toHaveTextContent('The greeting now says "Tony" on all your devices.')
     laptop.unmount()
 
     // The phone, a different device: nothing about the name is on it.
@@ -143,7 +144,7 @@ describe('the greeting name lives on the account', () => {
     await waitFor(() => expect(heading()).toHaveTextContent(/, Anthony$/))
 
     // Changed elsewhere meanwhile.
-    await auth.client(MAIN).setDisplayName('Tony')
+    await auth.client(MAIN).setDisplayName('Tony', MAIN)
     // Coming back to the tab. The listener is added by an effect just after
     // the first render, so keep "coming back" until it has been heard.
     await waitFor(() => {
@@ -327,5 +328,113 @@ describe('review 13: late answers never cross accounts or overwrite newer names'
     await waitFor(async () => expect(await getDb().meta.get(accountNameKey(MAIN))).toBeUndefined())
     expect(auth.users.get(MAIN)!.user_metadata.display_name).toBe('New cloud name')
     expect(auth.updates).toBe(0)
+  })
+})
+
+describe('review 14: a late read for one account never migrates its name into another', () => {
+  it('leaves B\'s name alone and keeps A\'s device copy when A\'s read lands after a switch to B', async () => {
+    const auth = new FakeAuth()
+    auth.addUser(MAIN, 'anthony@example.com', 'Anthony')
+    const b = auth.addUser(OTHER, 'ada@example.com', 'Ada', { display_name: 'Ada\'s choice' })
+    await getDb().meta.put({ key: accountNameKey(MAIN), value: 'Old device name' })
+    let releaseA!: () => void
+    const aReadDone = new Promise<void>(r => (releaseA = r))
+    let switchUser: (u: typeof b | null) => void = () => {}
+    const reads = auth.client(MAIN)
+    const client: AccountClient = auth.client(MAIN, {
+      onChange: (cb) => {
+        switchUser = cb
+        return () => {}
+      },
+      refreshUser: async () => {
+        const answer = await reads.refreshUser()
+        await aReadDone
+        return answer
+      },
+    })
+    renderDevice(client)
+    await screen.findByRole('button', { name: /^Account: Anthony/ })
+
+    // Another tab signs this browser in as B.
+    auth.switchSession(client, OTHER)
+    act(() => switchUser(b))
+    await screen.findByRole('button', { name: /^Account: Ada/ })
+    await act(async () => {
+      releaseA()
+      await new Promise(r => setTimeout(r, 50))
+    })
+
+    expect(auth.users.get(OTHER)!.user_metadata.display_name).toBe('Ada\'s choice')
+    expect(auth.updates).toBe(0)
+    expect((await getDb().meta.get(accountNameKey(MAIN)))?.value).toBe('Old device name')
+  })
+})
+
+describe('polish from the phone test, 2026-11-09', () => {
+  it('saving a name closes the account dialog and puts focus back on the account button', async () => {
+    const auth = new FakeAuth()
+    auth.addUser(MAIN, 'anthony@example.com', 'Anthony')
+    const { events } = renderDevice(auth.client(MAIN))
+    const account = await screen.findByRole('button', { name: /^Account: Anthony/ })
+    await events.click(account)
+    const field = screen.getByRole('textbox', { name: 'Name in the greeting' })
+    await events.clear(field)
+    await events.type(field, 'Tony{Enter}')
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Account: Tony/ })).toHaveFocus())
+    expect(screen.getAllByRole('status')[0]).toHaveTextContent('The greeting now says "Tony" on all your devices.')
+  })
+
+  it('stays open when more was typed while the save was in flight', async () => {
+    const auth = new FakeAuth()
+    auth.addUser(MAIN, 'anthony@example.com', 'Anthony')
+    let release!: () => void
+    auth.gate = new Promise<void>(r => (release = r))
+    const { events } = renderDevice(auth.client(MAIN))
+    await events.click(await screen.findByRole('button', { name: /^Account: Anthony/ }))
+    const field = screen.getByRole('textbox', { name: 'Name in the greeting' })
+    await events.clear(field)
+    await events.type(field, 'Tony{Enter}')
+    await events.type(field, ' B')
+    await act(async () => {
+      release()
+      await new Promise(r => setTimeout(r, 50))
+    })
+    expect(screen.getByRole('dialog', { name: 'Your account' })).toBeInTheDocument()
+    expect(field).toHaveValue('Tony B')
+  })
+
+  it('says "Signed in as …" once, then the notice goes away', async () => {
+    const auth = new FakeAuth()
+    auth.addUser(MAIN, 'anthony@example.com', 'Anthony')
+    window.history.replaceState(null, '', '/?code=abc')
+    renderDevice(auth.client(MAIN), { noticeMs: 300 })
+    const notice = () => screen.getAllByRole('status')[0]
+    await waitFor(() => expect(notice()).toHaveTextContent('Signed in as Anthony Ugwuja (anthony@example.com)'))
+    await waitFor(() => expect(notice()).toBeEmptyDOMElement())
+    // The live region stays in the page, ready for the next notice.
+    expect(notice()).toBeInTheDocument()
+  })
+
+  it('shows synced as an icon, with the meaning in the tooltip and the name, and no word', async () => {
+    const auth = new FakeAuth()
+    auth.addUser(MAIN, 'anthony@example.com', 'Anthony')
+    renderDevice(auth.client(MAIN))
+    const account = await screen.findByRole('button', { name: /^Account: Anthony \(anthony@example.com\), Synced$/ }, { timeout: 5000 })
+    expect(account).not.toHaveTextContent('Synced')
+    expect(account.querySelector('[data-sync="synced"] svg')).toHaveAttribute('aria-hidden', 'true')
+    expect(account).toHaveAttribute('title', 'anthony@example.com · Synced')
+  })
+
+  it('shows words only when something needs attention: Offline', async () => {
+    const auth = new FakeAuth()
+    auth.addUser(MAIN, 'anthony@example.com', 'Anthony')
+    const client = auth.client(MAIN)
+    ;(client.remote as InstanceType<typeof FakeRemote>).failing = 'offline'
+    renderDevice(client)
+    const account = await screen.findByRole('button', { name: /, Offline$/ }, { timeout: 5000 })
+    expect(account).toHaveTextContent('Offline')
+    expect(account).toHaveAttribute('title', 'anthony@example.com · Offline')
   })
 })

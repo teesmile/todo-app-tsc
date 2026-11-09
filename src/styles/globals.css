@@ -292,3 +292,24 @@
     cursor: not-allowed;
   }
 }
+
+/* A header notice ("Signed in as …"): shown, then faded out; the provider clears it. */
+@layer components {
+  .notice-fade {
+    animation: notice-fade 6s ease-in forwards;
+  }
+  @keyframes notice-fade {
+    0%,
+    75% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .notice-fade {
+      animation: none;
+    }
+  }
+}

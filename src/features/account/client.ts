@@ -27,10 +27,12 @@ export interface AccountClient {
   deleteAccount: (expectedUserId: string) => Promise<string | null>
   /**
    * Sets (or, with null, clears) the greeting name on the account, in the
-   * user's Supabase metadata, so every device gets it. Returns the updated
-   * user or an error message.
+   * user's Supabase metadata, so every device gets it. Refuses unless this
+   * browser's session is still `expectedUserId`: another tab may have
+   * signed in as someone else (review 14). Returns the updated user or
+   * an error message.
    */
-  setDisplayName: (name: string | null) => Promise<{ user: AccountUser | null, error: string | null }>
+  setDisplayName: (name: string | null, expectedUserId: string) => Promise<{ user: AccountUser | null, error: string | null }>
   /** Re-reads the user from Supabase Auth, to pick up a name changed on another device. */
   refreshUser: () => Promise<AccountUser | null>
   /** The server as the sync engine sees it, signed in as this session's user. */
@@ -78,7 +80,10 @@ export function accountClientFrom(supabase: SupabaseClient): AccountClient {
       const { error } = await supabase.rpc('delete_my_account', { expected_user_id: expectedUserId })
       return error?.message ?? null
     },
-    async setDisplayName(name) {
+    async setDisplayName(name, expectedUserId) {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user.id !== expectedUserId)
+        return { user: null, error: 'This is no longer the account the name was for' }
       const { data, error } = await supabase.auth.updateUser({ data: { [DISPLAY_NAME_KEY]: name } })
       return { user: data.user ? accountUserFrom(data.user) : null, error: error?.message ?? null }
     },

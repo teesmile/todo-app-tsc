@@ -36,6 +36,8 @@ interface AccountProviderProps {
   /** Injected by tests; the app uses the build's env variables and the real SDK. */
   configured?: boolean
   load?: () => Promise<AccountClient>
+  /** How long a notice ("Signed in as…") stays before it fades away. */
+  noticeMs?: number
 }
 
 /**
@@ -48,12 +50,22 @@ interface AccountProviderProps {
  * the remembered user stays signed in and changes queue until Supabase can
  * be reached.
  */
-export function AccountProvider({ children, configured = CONFIGURED, load = loadAccountClient }: AccountProviderProps) {
+const NOTICE_MS = 6000
+
+export function AccountProvider({ children, configured = CONFIGURED, load = loadAccountClient, noticeMs = NOTICE_MS }: AccountProviderProps) {
   const [state, setState] = useState<AccountState>(configured ? { status: 'checking' } : { status: 'off' })
   // The state as of right now, for async callbacks that must check which
   // account is signed in before they write anything.
   const current = useRef<AccountState>(state)
   const [notice, setNotice] = useState<string | null>(null)
+  // A notice is said once and then goes: it fades out (CSS) and is cleared
+  // here, so the header doesn't keep "Signed in as …" on screen.
+  useEffect(() => {
+    if (!notice)
+      return
+    const timer = setTimeout(() => setNotice(null), noticeMs)
+    return () => clearTimeout(timer)
+  }, [notice, noticeMs])
   const client = useRef<AccountClient | null>(null)
   const [remote, setRemote] = useState<Remote | null>(null)
   const [attempt, setAttempt] = useState(0)
@@ -94,17 +106,25 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
    * can't overwrite a name chosen on another device (review 13). The
    * device copy is dropped either way.
    */
-  const migrateDeviceName = useCallback(async (loaded: AccountClient, fresh: AccountUser) => {
+  const migrateDeviceName = useCallback(async (loaded: AccountClient, fresh: AccountUser, op: number) => {
+    // Only for the read that's still the latest, of the account still signed
+    // in: a late answer for A after a switch to B must not move A's name
+    // into B (review 14). Checked again after the IndexedDB read.
+    const stillCurrent = () => op === userOps.current && current.current.status === 'signed-in' && current.current.user.id === fresh.id
+    if (!stillCurrent())
+      return
     const local = (await getDb().meta.get(accountNameKey(fresh.id)))?.value
-    if (typeof local !== 'string')
+    if (typeof local !== 'string' || !stillCurrent())
       return
     if (!fresh.chosenName) {
-      const { user, error } = await loaded.setDisplayName(local)
+      // Bound to this account: refused if the session has changed meanwhile.
+      const { user, error } = await loaded.setDisplayName(local, fresh.id)
       if (error)
         return
       if (user)
         applyUser(user)
     }
+    // Dropped only once it's settled for the right account.
     await getDb().meta.delete(accountNameKey(fresh.id))
   }, [applyUser])
 
@@ -161,7 +181,7 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
             if (cancelled || !fresh || fresh.id !== user.id)
               return
             applyUser(fresh, op)
-            await migrateDeviceName(loaded, fresh)
+            await migrateDeviceName(loaded, fresh, op)
           }).catch(() => {
             // Offline, or storage unavailable: nothing changes, and the next
             // start or tab-show tries again. Never an unhandled rejection.
@@ -288,7 +308,7 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
       ? `Signed out. ${kept} unsynced change${kept === 1 ? ' stays' : 's stay'} on this device and will sync next time you sign in.`
       : 'Signed out. Your account\'s tasks were removed from this device; guest tasks are still here.')
     return { kind: 'done' }
-  }, [userId])
+  }, [userId, setAccount])
 
   const deleteAccount = useCallback(async (expectedUserId: string) => {
     const loaded = client.current
@@ -306,12 +326,12 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     setImportOffer(null)
     setNotice('Your account and everything stored with it were deleted. Guest tasks on this device are still here.')
     return null
-  }, [])
+  }, [setAccount])
 
   const retry = useCallback(() => {
     setAccount({ status: 'checking' })
     setAttempt(n => n + 1)
-  }, [])
+  }, [setAccount])
 
   const openImport = useCallback(() => {
     void importCandidates().then(setImportOffer)
@@ -344,11 +364,13 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
       return UNREACHABLE
     // A save supersedes any read already in flight.
     ++userOps.current
-    const { user, error } = await loaded.setDisplayName(name && name.trim() ? name.trim().slice(0, 40) : null)
+    const { user, error } = await loaded.setDisplayName(name && name.trim() ? name.trim().slice(0, 40) : null, userId)
     if (error)
       return `The name wasn't saved: ${error}`
-    if (user)
+    if (user) {
       applyUser(user)
+      setNotice(user.chosenName ? `The greeting now says "${user.chosenName}" on all your devices.` : 'The greeting uses your Google name again.')
+    }
     return null
   }, [userId, applyUser])
 
