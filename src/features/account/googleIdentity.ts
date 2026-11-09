@@ -80,9 +80,10 @@ export function loadGoogleIdentity(): Promise<GoogleIdApi> {
  * hashes `raw` and requires a match, so a token can't be replayed.
  */
 export async function makeNonce(): Promise<{ raw: string, hashed: string }> {
-  const bytes = crypto.getRandomValues(new Uint8Array(32))
-  const raw = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, '')
+  // Hex: always 64 characters (stripping base64's +/= made the length vary).
+  const hex = (data: Uint8Array) => [...data].map(b => b.toString(16).padStart(2, '0')).join('')
+  const raw = hex(crypto.getRandomValues(new Uint8Array(32)))
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw))
-  const hashed = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('')
+  const hashed = hex(new Uint8Array(digest))
   return { raw, hashed }
 }

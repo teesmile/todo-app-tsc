@@ -1,7 +1,7 @@
 import type { Task } from '../store/types'
 import { describe, expect, it } from 'vitest'
 import { nextDay } from './dates'
-import { groupKeyFor, groupTasks } from './group'
+import { arrangeTasks, groupKeyFor, groupKeyIn, groupTasks, isTaskSort } from './group'
 
 let n = 0
 function task(overrides: Partial<Task> = {}): Task {
@@ -69,19 +69,6 @@ describe('groupTasks', () => {
     expect(groupTasks([], '2026-11-07').map(g => g.key)).toEqual(['overdue', 'today', 'tomorrow', 'upcoming', 'none', 'done'])
   })
 
-  it('sorts by due date, then newest first, and Done by most recently completed', () => {
-    const today = '2026-11-07'
-    const lateA = task({ dueDate: '2026-11-20', createdAt: 10 })
-    const soon = task({ dueDate: '2026-11-10', createdAt: 5 })
-    const lateB = task({ dueDate: '2026-11-20', createdAt: 30 })
-    const doneFirst = task({ completed: true, completedAt: 100 })
-    const doneLast = task({ completed: true, completedAt: 300 })
-
-    const groups = Object.fromEntries(groupTasks([lateA, soon, lateB, doneFirst, doneLast], today).map(g => [g.key, g.tasks]))
-    expect(groups.upcoming).toEqual([soon, lateB, lateA])
-    expect(groups.done).toEqual([doneLast, doneFirst])
-  })
-
   it('places every task in exactly one group', () => {
     const today = '2026-11-07'
     const tasks = [
@@ -95,5 +82,46 @@ describe('groupTasks', () => {
     const groups = groupTasks(tasks, today)
     expect(groups.flatMap(g => g.tasks)).toHaveLength(tasks.length)
     expect(groups.map(g => g.tasks.length)).toEqual([1, 1, 1, 1, 1, 1])
+  })
+})
+
+describe('task order (owner, 2026-11-09): a task just added is at the top', () => {
+  const today = '2026-11-09'
+
+  it('sorts every group newest-added first, Vital and due date no longer ahead of it', () => {
+    const olderVital = task({ dueDate: '2026-11-20', vital: 1, createdAt: 100 })
+    const olderSooner = task({ dueDate: '2026-11-12', createdAt: 200 })
+    const newest = task({ dueDate: '2026-11-25', createdAt: 300 })
+    const doneOld = task({ completed: true, completedAt: 999, createdAt: 10 })
+    const doneNew = task({ completed: true, completedAt: 500, createdAt: 20 })
+    const groups = groupTasks([olderVital, olderSooner, newest, doneOld, doneNew], today)
+    expect(groups.find(g => g.key === 'upcoming')!.tasks.map(t => t.id)).toEqual([newest.id, olderSooner.id, olderVital.id])
+    expect(groups.find(g => g.key === 'done')!.tasks.map(t => t.id)).toEqual([doneNew.id, doneOld.id])
+  })
+
+  it('"Newest" is one list: open tasks newest-added first, then completed ones, newest-added first', () => {
+    const a = task({ createdAt: 1, dueDate: '2026-11-01' })
+    const b = task({ createdAt: 3, completed: true, completedAt: 50 })
+    const c = task({ createdAt: 2 })
+    const d = task({ createdAt: 4, dueDate: '2026-11-30', vital: 1 })
+    const e = task({ createdAt: 5, completed: true, completedAt: 40 })
+    const groups = arrangeTasks([a, b, c, d, e], 'newest', today)
+    expect(groups).toHaveLength(1)
+    expect(groups[0].key).toBe('newest')
+    expect(groups[0].tasks.map(t => t.id)).toEqual([d.id, c.id, a.id, e.id, b.id])
+  })
+
+  it('"Due date" is the grouped view, and each view knows which group a task lands in', () => {
+    const t = task({ dueDate: today })
+    expect(arrangeTasks([t], 'due', today).map(g => g.key)).toEqual(['overdue', 'today', 'tomorrow', 'upcoming', 'none', 'done'])
+    expect(groupKeyIn(t, 'due', today)).toBe('today')
+    expect(groupKeyIn(t, 'newest', today)).toBe('newest')
+  })
+
+  it('reads the sort from the URL value, "newest" by default', () => {
+    expect(isTaskSort('due')).toBe(true)
+    expect(isTaskSort('newest')).toBe(true)
+    expect(isTaskSort('oldest')).toBe(false)
+    expect(isTaskSort(null)).toBe(false)
   })
 })

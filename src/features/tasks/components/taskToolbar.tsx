@@ -2,16 +2,21 @@
 
 import type { Ref } from 'react'
 import type { TaskFilter } from '../lib/filter'
+import type { TaskSort } from '../lib/group'
 import type { Category } from '../store/types'
 import { Search } from 'lucide-react'
 import { useId } from 'react'
 import { FILTER_LABELS, FILTERS } from '../lib/filter'
+import { SORT_LABELS, SORTS } from '../lib/group'
 
 interface TaskToolbarProps {
   query: string
   onQueryChange: (query: string) => void
   filter: TaskFilter
   onFilterChange: (filter: TaskFilter) => void
+  /** Newest (one list) or Due date (grouped), like the filters a set of native radios. */
+  sort: TaskSort
+  onSortChange: (sort: TaskSort) => void
   /** How many tasks the current filter and search show, announced politely. */
   shown: number | undefined
   searchRef?: Ref<HTMLInputElement>
@@ -28,7 +33,7 @@ interface TaskToolbarProps {
  * group, Overdue, 3 of 5". The radios are visually hidden and the labels draw
  * the segmented control, focus ring included.
  */
-export function TaskToolbar({ query, onQueryChange, filter, onFilterChange, shown, searchRef, categories, label, onLabelChange, onManageLabels }: TaskToolbarProps) {
+export function TaskToolbar({ query, onQueryChange, filter, onFilterChange, sort, onSortChange, shown, searchRef, categories, label, onLabelChange, onManageLabels }: TaskToolbarProps) {
   const id = useId()
 
   return (
@@ -58,28 +63,51 @@ export function TaskToolbar({ query, onQueryChange, filter, onFilterChange, show
         </div>
       </div>
 
-      <fieldset>
-        <legend className="mb-1 text-sm font-medium text-gray-700">Show</legend>
-        {/* Six filters: a 3×2 grid on phones, so none spills out of the card at
-            360px; one compact pill from tablet width. */}
-        <div className="grid w-full grid-cols-3 gap-1 rounded-lg bg-gray-100 p-1 md:inline-flex md:w-auto">
-          {FILTERS.map(value => (
-            <label key={value} className="min-w-0 cursor-pointer md:flex-none">
-              <input
-                type="radio"
-                name={`${id}-filter`}
-                value={value}
-                checked={filter === value}
-                onChange={() => onFilterChange(value)}
-                className="peer sr-only"
-              />
-              <span className="block min-h-9 whitespace-nowrap rounded-md px-1.5 py-2 text-center text-sm text-gray-600 md:min-h-0 md:px-3 md:py-1 peer-checked:bg-white peer-checked:font-medium peer-checked:text-gray-900 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500">
-                {FILTER_LABELS[value]}
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      {/* Show and Order side by side from tablet width; stacked on phones. */}
+      <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+        <fieldset className="w-full md:w-auto">
+          <legend className="mb-1 text-sm font-medium text-gray-700">Show</legend>
+          {/* Six filters: a 3×2 grid on phones, so none spills out of the card at
+              360px; one compact pill from tablet width. */}
+          <div className="grid w-full grid-cols-3 gap-1 rounded-lg bg-gray-100 p-1 md:inline-flex md:w-auto">
+            {FILTERS.map(value => (
+              <label key={value} className="min-w-0 cursor-pointer md:flex-none">
+                <input
+                  type="radio"
+                  name={`${id}-filter`}
+                  value={value}
+                  checked={filter === value}
+                  onChange={() => onFilterChange(value)}
+                  className="peer sr-only"
+                />
+                <span className="block min-h-9 whitespace-nowrap rounded-md px-1.5 py-2 text-center text-sm text-gray-600 md:min-h-0 md:px-3 md:py-1 peer-checked:bg-white peer-checked:font-medium peer-checked:text-gray-900 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500">
+                  {FILTER_LABELS[value]}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend className="mb-1 text-sm font-medium text-gray-700">Order</legend>
+          <div className="inline-flex gap-1 rounded-lg bg-gray-100 p-1">
+            {SORTS.map(value => (
+              <label key={value} className="min-w-0 cursor-pointer">
+                <input
+                  type="radio"
+                  name={`${id}-sort`}
+                  value={value}
+                  checked={sort === value}
+                  onChange={() => onSortChange(value)}
+                  className="peer sr-only"
+                />
+                <span className="block min-h-9 whitespace-nowrap rounded-md px-3 py-2 text-center text-sm text-gray-600 md:min-h-0 md:py-1 peer-checked:bg-white peer-checked:font-medium peer-checked:text-gray-900 peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500">
+                  {SORT_LABELS[value]}
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </div>
 
       <div className="flex flex-wrap items-end gap-2">
         {categories.length > 0 && (

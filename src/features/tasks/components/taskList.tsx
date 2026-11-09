@@ -13,7 +13,7 @@ import { useToday } from '../hooks/useToday'
 import { saveErrorMessage } from '../lib/errors'
 import { FILTER_LABELS, filterTasks } from '../lib/filter'
 import { focusAfterRemoving } from '../lib/focus'
-import { groupKeyFor, groupTasks } from '../lib/group'
+import { arrangeTasks, groupKeyIn } from '../lib/group'
 import { useCategories, useTasks } from '../store/hooks'
 import { clearSamples, purgeGuestTombstones, remove, undoRemove } from '../store/repository'
 import { holdUndo } from '../store/undoHolds'
@@ -40,12 +40,13 @@ export function TaskList() {
   const today = useToday()
   const now = useNow()
   const categories = useCategories(ownerId)
-  const { filter, setFilter, query, setQuery, label: labelParam, setLabel } = useListParams()
+  const { filter, setFilter, query, setQuery, label: labelParam, setLabel, sort, setSort } = useListParams()
   // A label filter pointing at a label that no longer exists means every label.
   const label = labelParam && categories?.some(c => c.id === labelParam) ? labelParam : null
   // Filtering is a pure pass over tasks already in memory: instant, no debounce.
   const shown = useMemo(() => (tasks ? filterTasks(tasks, { filter, query, label }, today) : undefined), [tasks, filter, query, label, today])
-  const groups = useMemo(() => (shown ? groupTasks(shown, today).filter(g => g.tasks.length > 0) : undefined), [shown, today])
+  // Newest (default): one list, newest added first. Due date: the date groups.
+  const groups = useMemo(() => (shown ? arrangeTasks(shown, sort, today).filter(g => g.tasks.length > 0) : undefined), [shown, sort, today])
   const hasSamples = tasks?.some(task => task.isSample === 1) ?? false
 
   // Open inline editors, by task id, so a row that changes group keeps its draft.
@@ -213,7 +214,7 @@ export function TaskList() {
    */
   function handleToggled(task: Task) {
     const visible = filterTasks([task], { filter, query, label }, today).length > 0
-    requestFocus(visible || !groups ? { kind: 'row', id: task.id, group: groupKeyFor(task, today) } : focusAfterRemoving(groups, task.id))
+    requestFocus(visible || !groups ? { kind: 'row', id: task.id, group: groupKeyIn(task, sort, today) } : focusAfterRemoving(groups, task.id))
     setToast({ id: crypto.randomUUID(), message: `${task.completed ? 'Completed' : 'Reopened'} "${task.title}"`, durationMs: 3000 })
   }
 
@@ -246,6 +247,8 @@ export function TaskList() {
             onQueryChange={setQuery}
             filter={filter}
             onFilterChange={setFilter}
+            sort={sort}
+            onSortChange={setSort}
             shown={shown?.length}
             searchRef={searchRef}
             categories={categories ?? []}

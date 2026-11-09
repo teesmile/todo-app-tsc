@@ -15,6 +15,8 @@ const today = toLocalDateString(new Date())
 const stored = async (id: string) => (await getDb().tasks.get(id))!
 
 async function renderList() {
+  // These tests are about the date groups: the Due date view (Newest is the default).
+  window.history.replaceState(null, '', '/?sort=due')
   const user = userEvent.setup()
   render(<TaskList />)
   await waitFor(() => expect(screen.queryByText('Loading tasks')).not.toBeInTheDocument())

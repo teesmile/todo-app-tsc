@@ -46,6 +46,7 @@ describe('1: a save from a row that regrouped never deletes the newer draft', ()
     const tomorrow = toLocalDateString(addDays(start, 1))
     await add({ title: 'Midnight task', dueDate: tomorrow })
     const user = userEvent.setup()
+    window.history.replaceState(null, '', '/?sort=due')
     render(<TaskList />)
     await user.click(await screen.findByRole('button', { name: 'Edit "Midnight task"' }))
     const release = holdNextPut('tasks')
@@ -68,6 +69,7 @@ describe('2: typing during a label save is kept', () => {
   it('keeps text typed while a rename is saving, and saves it next without a false conflict', async () => {
     await createCategory({ name: 'Work', color: 'blue' })
     const user = userEvent.setup()
+    window.history.replaceState(null, '', '/?sort=due')
     render(<TaskList />)
     await user.click(await screen.findByRole('button', { name: 'Manage labels' }))
     const manager = screen.getByRole('dialog', { name: 'Labels' })
@@ -87,6 +89,7 @@ describe('2: typing during a label save is kept', () => {
 
   it('keeps text typed while a new label is being created', async () => {
     const user = userEvent.setup()
+    window.history.replaceState(null, '', '/?sort=due')
     render(<TaskList />)
     await user.click(await screen.findByRole('button', { name: 'Manage labels' }))
     const manager = screen.getByRole('dialog', { name: 'Labels' })

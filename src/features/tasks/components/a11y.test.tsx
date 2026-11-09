@@ -20,6 +20,8 @@ async function violations(context: Element = document.body) {
 }
 
 async function renderHome() {
+  // These tests are about the date groups: the Due date view (Newest is the default).
+  window.history.replaceState(null, '', '/?sort=due')
   const user = userEvent.setup()
   render(<Home />)
   await screen.findByRole('region', { name: /^No date/ })

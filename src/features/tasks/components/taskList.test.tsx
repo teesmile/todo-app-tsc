@@ -27,6 +27,8 @@ function titlesIn(group: string) {
 }
 
 async function renderList() {
+  // These tests are about the date groups: the Due date view (Newest is the default).
+  window.history.replaceState(null, '', '/?sort=due')
   const user = userEvent.setup()
   render(<TaskList />)
   await screen.findByRole('region', { name: /^No date/ })

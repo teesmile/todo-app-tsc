@@ -22,6 +22,8 @@ interface TaskGroupProps {
 export function TaskGroup({ group, onDelete, onSaved, onToggled, today, now }: TaskGroupProps) {
   const headingId = useId()
   const tone = group.key === 'overdue' ? 'text-red-700' : 'text-gray-700'
+  // The Newest view is one flat list: its heading is for screen readers only.
+  const hidden = group.key === 'newest' ? 'sr-only' : 'mb-2'
 
   return (
     <section aria-labelledby={headingId} data-group={group.key}>
@@ -29,7 +31,7 @@ export function TaskGroup({ group, onDelete, onSaved, onToggled, today, now }: T
         id={headingId}
         tabIndex={-1}
         data-group-heading={group.key}
-        className={`mb-2 text-sm font-semibold ${tone} focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}
+        className={`${hidden} text-sm font-semibold ${tone} focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500`}
       >
         {group.label}
         {' '}

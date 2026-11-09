@@ -5,7 +5,7 @@ import { getDb } from '../store/db'
 import { add, createCategory, listCategories, listTasks, update } from '../store/repository'
 import { TaskList } from './taskList'
 
-async function renderList(url = '/') {
+async function renderList(url = '/?sort=due') {
   window.history.replaceState(null, '', url)
   const user = userEvent.setup()
   render(<TaskList />)
@@ -20,17 +20,19 @@ function titlesIn(group: string) {
 }
 
 describe('vital', () => {
-  it('toggles Vital from the row, and a vital task moves to the top of its group', async () => {
+  it('toggles Vital from the row, and the newest task stays on top of its group (owner, 2026-11-09)', async () => {
     await add({ title: 'Ordinary later', dueDate: null })
-    await add({ title: 'Make me vital', dueDate: null })
+    await add({ title: 'Newest', dueDate: null })
     const user = await renderList()
-    expect(titlesIn('No date')[0]).toBe('Make me vital')
+    // Only these two: the samples are seeded when the first add opens the database.
+    const order = () => titlesIn('No date').filter(t => t === 'Newest' || t === 'Ordinary later')
+    expect(order()).toEqual(['Newest', 'Ordinary later'])
 
     const older = await stored('Ordinary later')
     await user.click(screen.getByRole('button', { name: 'Vital: "Ordinary later"' }))
     await waitFor(async () => expect((await stored('Ordinary later'))?.vital).toBe(1))
-    await waitFor(() => expect(titlesIn('No date')[0]).toBe('Ordinary later'))
-    expect(screen.getByRole('button', { name: 'Vital: "Ordinary later"' })).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Vital: "Ordinary later"' })).toHaveAttribute('aria-pressed', 'true'))
+    expect(order()).toEqual(['Newest', 'Ordinary later'])
     expect(older?.vital).toBe(0)
   })
 
