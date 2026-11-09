@@ -19,7 +19,10 @@ vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(w
 // jsdom has no <dialog> modal API and no matchMedia. These stand-ins do what
 // our code relies on: showModal/close toggle `open` and fire `close`, and
 // matchMedia reports a desktop-width screen unless a test says otherwise.
-if (!HTMLDialogElement.prototype.showModal) {
+// A few tests (building the service worker) run in Node, with no DOM.
+const hasDom = typeof window !== 'undefined'
+
+if (hasDom && !HTMLDialogElement.prototype.showModal) {
   HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
     this.setAttribute('open', '')
     // The dialog focusing steps: an [autofocus] descendant, else the first
@@ -45,16 +48,18 @@ if (!HTMLDialogElement.prototype.showModal) {
     this.dispatchEvent(new Event('close'))
   }
 }
-window.matchMedia = (query: string) => ({
-  matches: query.includes('min-width') ? screenSize.desktop : !screenSize.desktop,
-  media: query,
-  onchange: null,
-  addListener: () => {},
-  removeListener: () => {},
-  addEventListener: () => {},
-  removeEventListener: () => {},
-  dispatchEvent: () => false,
-})
+if (hasDom) {
+  window.matchMedia = (query: string) => ({
+    matches: query.includes('min-width') ? screenSize.desktop : !screenSize.desktop,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })
+}
 
 function deleteRaw(name: string) {
   return new Promise<void>((resolve, reject) => {
@@ -66,6 +71,8 @@ function deleteRaw(name: string) {
 }
 
 afterEach(async () => {
+  if (!hasDom)
+    return
   // Testing Library only auto-cleans when Vitest globals are on; they're off here.
   cleanup()
   window.history.replaceState(null, '', '/')

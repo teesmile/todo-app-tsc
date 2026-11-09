@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Google_Sans, Inter } from 'next/font/google'
 import { MovedBanner } from '@/components/movedBanner'
 import { SITE_URL } from '@/config/site'
+import { UpdatePrompt } from '@/features/pwa/updatePrompt'
 import '../styles/globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -32,6 +33,7 @@ export default function RootLayout({
     <html lang="en" className={googleSans.variable}>
       <body className={inter.className}>
         <MovedBanner />
+        <UpdatePrompt />
         {children}
       </body>
     </html>
