@@ -94,6 +94,37 @@ describe('the service worker and its update prompt', () => {
     expect(reload).not.toHaveBeenCalled()
   })
 
+  it('when another tab applies the update, offers this tab a plain reload, taken only when asked (review 18)', async () => {
+    const waiting = fakeWorker('installed') as ReturnType<typeof fakeWorker>
+    const fake = fakeContainer({ controlled: true, waiting })
+    const reload = vi.fn()
+    const offers: (() => void)[] = []
+    await registerServiceWorker(fake.container, { onUpdate: a => offers.push(a), reload })
+    expect(offers).toHaveLength(1)
+
+    fake.controllerChange()
+    expect(reload).not.toHaveBeenCalled()
+    expect(offers).toHaveLength(2)
+    // Either offer now reloads this page, without messaging the worker again.
+    offers[0]()
+    expect(reload).toHaveBeenCalledOnce()
+    expect(waiting.messages).toEqual([])
+    offers[1]()
+    expect(reload).toHaveBeenCalledTimes(2)
+  })
+
+  it('after the first install claims the page, a later update from another tab is still offered', async () => {
+    const fake = fakeContainer({ controlled: false })
+    const onUpdate = vi.fn()
+    const reload = vi.fn()
+    await registerServiceWorker(fake.container, { onUpdate, reload })
+    fake.controllerChange()
+    expect(onUpdate).not.toHaveBeenCalled()
+    fake.controllerChange()
+    expect(onUpdate).toHaveBeenCalledOnce()
+    expect(reload).not.toHaveBeenCalled()
+  })
+
   it('shows "Update available" with a Reload button that applies it', async () => {
     const waiting = fakeWorker('installed') as ReturnType<typeof fakeWorker>
     const fake = fakeContainer({ controlled: true, waiting })

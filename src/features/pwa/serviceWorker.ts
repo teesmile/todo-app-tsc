@@ -21,11 +21,21 @@ export interface ContainerLike {
  * a function that applies it: it asks the waiting worker to take over, and
  * the page reloads once it has. Nothing reloads on its own: the first
  * install takes control silently, and an update only applies when asked.
+ *
+ * Another tab can apply the update first. This page is then still running
+ * the old code under the new worker, so it's offered a plain reload, shown
+ * the same way and taken only when the user asks (review 18).
  */
 export async function registerServiceWorker(container: ContainerLike, { onUpdate, reload }: { onUpdate: (apply: () => void) => void, reload: () => void }): Promise<RegistrationLike> {
   const registration = await container.register('/sw.js', { scope: '/' })
+  // Whether a worker controlled this page before the latest change.
+  let controlled = !!container.controller
   let requested = false
+  let replaced = false
   const offer = (worker: WorkerLike) => onUpdate(() => {
+    // Already taken over (from another tab): only this page is behind.
+    if (replaced)
+      return reload()
     requested = true
     worker.postMessage({ type: 'SKIP_WAITING' })
   })
@@ -42,9 +52,16 @@ export async function registerServiceWorker(container: ContainerLike, { onUpdate
     })
   })
   container.addEventListener('controllerchange', () => {
+    const wasControlled = controlled
+    controlled = true
     if (requested) {
       requested = false
       reload()
+    }
+    else if (wasControlled && !replaced) {
+      // Another tab applied an update; never on the first install.
+      replaced = true
+      onUpdate(reload)
     }
   })
   return registration

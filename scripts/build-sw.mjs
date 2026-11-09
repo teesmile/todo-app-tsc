@@ -10,6 +10,14 @@ import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { build } from 'esbuild'
 
+/** Same rule as urlForFile in src/sw/routing.ts (a test keeps them in step): pages by their clean URL. */
+export function urlForFile(path) {
+  if (!path.endsWith('.html'))
+    return path
+  const page = path.slice(0, -'.html'.length).replace(/(^|\/)index$/, '')
+  return page === '' ? '/' : page
+}
+
 async function filesUnder(dir) {
   const out = []
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -26,6 +34,8 @@ export async function buildServiceWorker({ outDir = 'out', entry = 'src/sw/sw.ts
   const files = (await filesUnder(outDir))
     .map(path => ({ path, url: `/${relative(outDir, path).split(sep).join('/')}` }))
     .filter(({ url }) => url !== '/sw.js')
+    // Next's own not-found route; /404 is the page a browser gets.
+    .filter(({ url }) => url !== '/_not-found.html')
     .sort((a, b) => a.url.localeCompare(b.url))
   const hash = createHash('sha256')
   for (const { path, url } of files) {
@@ -33,7 +43,8 @@ export async function buildServiceWorker({ outDir = 'out', entry = 'src/sw/sw.ts
     hash.update(createHash('sha256').update(await readFile(path)).digest())
   }
   const version = hash.digest('hex').slice(0, 16)
-  const precache = files.map(f => f.url)
+  // Fetched at install by the URL Vercel serves, not the filename.
+  const precache = files.map(f => urlForFile(f.url))
   const outfile = join(outDir, 'sw.js')
   await build({
     entryPoints: [entry],
