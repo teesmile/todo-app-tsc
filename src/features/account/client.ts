@@ -51,7 +51,11 @@ let loading: Promise<AccountClient> | null = null
  * Wraps a Supabase client in the AccountClient methods. Exported so a test
  * can run it against the real SDK with a mocked network.
  */
-export function accountClientFrom(supabase: SupabaseClient): AccountClient {
+export function accountClientFrom(
+  supabase: SupabaseClient,
+  { url = SUPABASE_URL, key = SUPABASE_PUBLISHABLE_KEY, fetch: doFetch = (...args: Parameters<typeof fetch>) => fetch(...args) }: { url?: string, key?: string, fetch?: typeof fetch } = {},
+): AccountClient {
+  const mismatch = { user: null, error: 'This is no longer the account the name was for' }
   return {
     async currentUser() {
       // initialize() finishes a Google redirect's code exchange. Its error is
@@ -91,11 +95,29 @@ export function accountClientFrom(supabase: SupabaseClient): AccountClient {
       return error?.message ?? null
     },
     async setDisplayName(name, expectedUserId) {
+      // The check and the write use the same identity: the update goes to
+      // Supabase Auth with the access token just checked, not through
+      // updateUser(), which reads the session again on its own, after
+      // another tab may have switched it (review 15).
       const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user.id !== expectedUserId)
-        return { user: null, error: 'This is no longer the account the name was for' }
-      const { data, error } = await supabase.auth.updateUser({ data: { [DISPLAY_NAME_KEY]: name } })
-      return { user: data.user ? accountUserFrom(data.user) : null, error: error?.message ?? null }
+      if (!session || session.user.id !== expectedUserId)
+        return mismatch
+      try {
+        const response = await doFetch(`${url}/auth/v1/user`, {
+          method: 'PUT',
+          headers: { 'apikey': key, 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: { [DISPLAY_NAME_KEY]: name } }),
+        })
+        const body = await response.json().catch(() => null) as { id?: string, email?: string, user_metadata?: Record<string, unknown>, msg?: string, message?: string } | null
+        if (!response.ok)
+          return { user: null, error: body?.msg ?? body?.message ?? `HTTP ${response.status}` }
+        if (body?.id !== expectedUserId)
+          return mismatch
+        return { user: accountUserFrom({ id: body.id, email: body.email, user_metadata: body.user_metadata }), error: null }
+      }
+      catch (error) {
+        return { user: null, error: error instanceof Error ? error.message : 'Network error' }
+      }
     },
     async refreshUser() {
       const { data, error } = await supabase.auth.getUser()

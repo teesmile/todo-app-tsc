@@ -279,7 +279,14 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     }
   }, [ensureClient])
 
+  // One ID-token exchange at a time: a second choice made while the first
+  // is in flight could finish first and then be replaced by the older one
+  // (review 15).
+  const idTokenInFlight = useRef(false)
   const signInWithIdToken = useCallback(async (token: string, rawNonce: string) => {
+    if (idTokenInFlight.current)
+      return 'Already signing in. Wait a moment.'
+    idTokenInFlight.current = true
     try {
       const loaded = await ensureClient()
       const { user, error } = await loaded.signInWithIdToken(token, rawNonce)
@@ -293,6 +300,9 @@ export function AccountProvider({ children, configured = CONFIGURED, load = load
     }
     catch {
       return UNREACHABLE
+    }
+    finally {
+      idTokenInFlight.current = false
     }
   }, [ensureClient])
 

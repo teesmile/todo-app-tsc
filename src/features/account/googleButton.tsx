@@ -3,7 +3,7 @@
 import type { GoogleIdApi } from './googleIdentity'
 import Image from 'next/image'
 import { useEffect, useRef } from 'react'
-import { googleClientId, loadGoogleIdentity, makeNonce } from './googleIdentity'
+import { forgetGoogleIdentityLoader, googleClientId, loadGoogleIdentity, makeNonce } from './googleIdentity'
 
 /**
  * The fallback: Google's sign-in button design, built to its branding guidelines (styles in
@@ -22,8 +22,12 @@ export function GoogleSignInButton({ onClick, disabled = false, busy = false }: 
   )
 }
 
-/** How long Google's button may take to draw before an empty frame counts as refused. */
-const GOOGLE_BUTTON_CHECK_MS = 4000
+/**
+ * How long Google's button has to appear, counted from when the dialog
+ * shows it. Covers a script that stalls without failing as well as a site
+ * Google refuses (an empty frame).
+ */
+const GOOGLE_BUTTON_DEADLINE_MS = 6000
 
 /**
  * Google's own button, drawn by Google Identity Services. Signing in happens
@@ -46,12 +50,27 @@ export function GoogleIdentityButton({ onCredential, onUnavailable, load = loadG
 
   useEffect(() => {
     let cancelled = false
-    let check: ReturnType<typeof setTimeout> | undefined
     const clientId = googleClientId()
     if (!clientId) {
       callbacks.current.onUnavailable()
       return
     }
+    // One deadline from the start (review 15). Google's button counts
+    // as drawn when something is in the container and it isn't a zero-size
+    // frame, which is what Google draws for a site it hasn't approved (any
+    // origin not on the OAuth client, such as a preview URL).
+    const deadline = setTimeout(() => {
+      const parent = container.current
+      if (cancelled || !parent)
+        return
+      const frame = parent.querySelector('iframe')
+      const box = frame?.getBoundingClientRect()
+      const drawn = parent.childElementCount > 0 && !(frame && (!box?.width || !box?.height))
+      if (!drawn) {
+        forgetGoogleIdentityLoader()
+        callbacks.current.onUnavailable()
+      }
+    }, GOOGLE_BUTTON_DEADLINE_MS)
     void (async () => {
       try {
         // A fresh nonce for each time the button is drawn.
@@ -77,16 +96,6 @@ export function GoogleIdentityButton({ onCredential, onUnavailable, load = loadG
           logo_alignment: 'left',
           width: Math.min(400, Math.round(parent.getBoundingClientRect().width) || 320),
         })
-        // For a site it hasn't approved (any origin not on the OAuth client,
-        // such as a preview URL), Google throws nothing: it draws a
-        // zero-size frame and logs an error. Still empty after a moment
-        // means unusable, so fall back to the redirect button.
-        check = setTimeout(() => {
-          const frame = parent.querySelector('iframe')
-          const box = frame?.getBoundingClientRect()
-          if (!cancelled && frame && (!box?.width || !box?.height))
-            callbacks.current.onUnavailable()
-        }, GOOGLE_BUTTON_CHECK_MS)
       }
       catch {
         if (!cancelled)
@@ -95,7 +104,7 @@ export function GoogleIdentityButton({ onCredential, onUnavailable, load = loadG
     })()
     return () => {
       cancelled = true
-      clearTimeout(check)
+      clearTimeout(deadline)
     }
   }, [load])
 

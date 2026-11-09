@@ -203,11 +203,14 @@ function AccountDialog({ open, onClose, returnFocus }: { open: boolean, onClose:
         ? googleFallback
           ? <GoogleSignInButton key={method} onClick={() => signInWith(method)} disabled={busy} busy={busy} />
           : (
-              <GoogleIdentityButton
-                key={method}
-                onCredential={(token, rawNonce) => void run(() => account.signInWithIdToken(token, rawNonce))}
-                onUnavailable={() => setGoogleFallback(true)}
-              />
+              // Inert while a sign-in is in progress: one exchange at a time (review 15).
+              <div key={method} inert={busy} aria-busy={busy} className={busy ? 'opacity-50' : undefined}>
+                <GoogleIdentityButton
+                  onCredential={(token, rawNonce) => void run(() => account.signInWithIdToken(token, rawNonce))}
+                  onUnavailable={() => setGoogleFallback(true)}
+                />
+                {busy && <p className="mt-2 text-center text-sm text-gray-700">Signing in…</p>}
+              </div>
             )
         : null))}
     </div>

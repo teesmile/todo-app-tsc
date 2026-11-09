@@ -51,6 +51,11 @@ declare global {
 
 let loading: Promise<GoogleIdApi> | null = null
 
+/** Drops a pending load (one that stalled), so the next try requests the script again. */
+export function forgetGoogleIdentityLoader(): void {
+  loading = null
+}
+
 /** Loads Google's script once. Rejects (and lets a later call retry) if it can't load. */
 export function loadGoogleIdentity(): Promise<GoogleIdApi> {
   if (window.google?.accounts?.id)
